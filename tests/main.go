@@ -186,6 +186,18 @@ func deepCopyNetworkConfig(original *cortexbuilder.NetworkConfig) *cortexbuilder
 }
 
 func main() {
+	// Run all benchmarks and capture the results
+	ops32, ops64, maxLayers32, maxLayers64 := cortexbuilder.RunAllBenchmarks()
+
+	// Print the captured results
+	fmt.Printf("Results:\n")
+	fmt.Printf("Float32 Operations per Second: %d\n", ops32)
+	fmt.Printf("Float64 Operations per Second: %d\n", ops64)
+	fmt.Printf("Estimated Maximum Layers with Float32: %d (assuming 1000 nodes per layer)\n", maxLayers32)
+	fmt.Printf("Estimated Maximum Layers with Float64: %d (assuming 1000 nodes per layer)\n", maxLayers64)
+}
+
+func test1main() {
 	// Step 1: Create test data
 	createTestData(".")
 
