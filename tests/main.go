@@ -186,15 +186,19 @@ func deepCopyNetworkConfig(original *cortexbuilder.NetworkConfig) *cortexbuilder
 }
 
 func main() {
-	// Run all benchmarks and capture the results
-	ops32, ops64, maxLayers32, maxLayers64 := cortexbuilder.RunAllBenchmarks()
+	// Run all benchmarks and capture the 8 return values
+	ops32Single, ops64Single, ops32Multi, ops64Multi, maxLayers32Single, maxLayers64Single, maxLayers32Multi, maxLayers64Multi := cortexbuilder.RunAllBenchmarks()
 
-	// Print the captured results
+	// Output the results
 	fmt.Printf("Results:\n")
-	fmt.Printf("Float32 Operations per Second: %d\n", ops32)
-	fmt.Printf("Float64 Operations per Second: %d\n", ops64)
-	fmt.Printf("Estimated Maximum Layers with Float32: %d (assuming 1000 nodes per layer)\n", maxLayers32)
-	fmt.Printf("Estimated Maximum Layers with Float64: %d (assuming 1000 nodes per layer)\n", maxLayers64)
+	fmt.Printf("Single-threaded Float32 Operations per Second: %s\n", ops32Single)
+	fmt.Printf("Single-threaded Float64 Operations per Second: %s\n", ops64Single)
+	fmt.Printf("Multi-threaded Float32 Operations per Second: %s\n", ops32Multi)
+	fmt.Printf("Multi-threaded Float64 Operations per Second: %s\n", ops64Multi)
+	fmt.Printf("Estimated Maximum Layers with Single-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Single)
+	fmt.Printf("Estimated Maximum Layers with Single-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Single)
+	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Multi)
+	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Multi)
 }
 
 func test1main() {
