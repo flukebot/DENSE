@@ -1,4 +1,4 @@
-package cortexbuilder
+package dense
 
 import (
 	"fmt"

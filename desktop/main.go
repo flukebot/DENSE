@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cortexbuilder" // Import your cortexbuilder package
+	"dense" // Import your dense package
 	"flag"
 	"fmt"
 	"os"
@@ -35,7 +35,7 @@ func main() {
 // Function to handle creating a new model
 func handleCreateModel() {
     // This function generates a random model
-    model := cortexbuilder.RandomizeNetworkStaticTesting()
+    model := dense.RandomizeNetworkStaticTesting()
     fmt.Println("Created Neural Network Model:\n", model)
 }
 
@@ -47,7 +47,7 @@ func handleRunModel(jsonPath string) {
     }
 
     // Load the network config from JSON
-    config, err := cortexbuilder.LoadNetworkConfig(jsonPath)
+    config, err := dense.LoadNetworkConfig(jsonPath)
     if err != nil {
         fmt.Println("Error loading network config:", err)
         return
@@ -61,7 +61,7 @@ func handleRunModel(jsonPath string) {
     }
 
     // Run the feedforward computation
-    outputs := cortexbuilder.Feedforward(config, inputValues)
+    outputs := dense.Feedforward(config, inputValues)
 
     // Print the output
     fmt.Println("Neural Network Outputs:", outputs)

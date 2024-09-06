@@ -1,17 +1,17 @@
 # Compile
 
 ```
-go build -o ./cortexbuilder
+go build -o ./dense
 ```
 
 
 # Example to create a model
 ```
-./cortexbuilder -createModel
+./dense -createModel
 ```
 
 
 # Example to run a model with a JSON config
 ```
-./cortexbuilder -runModel -json=network_config.json
+./dense -runModel -json=network_config.json
 ```

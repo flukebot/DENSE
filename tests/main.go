@@ -1,7 +1,7 @@
 package main
 
 import (
-	"cortexbuilder"
+	"dense"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -42,7 +42,7 @@ func writeData(writer *csv.Writer, numRows int) {
 	writer.Flush() // Flush the buffer
 }
 
-func loadTestData(filePath string) ([]cortexbuilder.TestData, error) {
+func loadTestData(filePath string) ([]dense.TestData, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -55,7 +55,7 @@ func loadTestData(filePath string) ([]cortexbuilder.TestData, error) {
 		return nil, err
 	}
 
-	var testData []cortexbuilder.TestData
+	var testData []dense.TestData
 	for _, record := range records[1:] { // skip headers
 		inputs := map[string]float64{
 			"input1": parseFloat(record[0]),
@@ -67,7 +67,7 @@ func loadTestData(filePath string) ([]cortexbuilder.TestData, error) {
 			"output2": parseFloat(record[4]),
 			"output3": parseFloat(record[5]),
 		}
-		testData = append(testData, cortexbuilder.TestData{Inputs: inputs, Outputs: outputs})
+		testData = append(testData, dense.TestData{Inputs: inputs, Outputs: outputs})
 	}
 	return testData, nil
 }
@@ -77,7 +77,7 @@ func parseFloat(value string) float64 {
 	return result
 }
 
-func saveNetworkConfig(config *cortexbuilder.NetworkConfig, filename string) error {
+func saveNetworkConfig(config *dense.NetworkConfig, filename string) error {
 	configJSON, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
@@ -101,10 +101,10 @@ func logImprovement(iteration int, error float64, improvement float64) error {
 	return nil
 }
 
-func evaluateNetwork(config *cortexbuilder.NetworkConfig, testData []cortexbuilder.TestData) float64 {
+func evaluateNetwork(config *dense.NetworkConfig, testData []dense.TestData) float64 {
 	totalError := 0.0
 	for _, data := range testData {
-		outputs := cortexbuilder.Feedforward(config, data.Inputs)
+		outputs := dense.Feedforward(config, data.Inputs)
 		for key, expected := range data.Outputs {
 			actual := outputs[key]
 			totalError += math.Abs(expected - actual)
@@ -114,20 +114,20 @@ func evaluateNetwork(config *cortexbuilder.NetworkConfig, testData []cortexbuild
 }
 
 // Add new layers or neurons randomly to increase complexity
-func mutateNetwork(config *cortexbuilder.NetworkConfig) {
+func mutateNetwork(config *dense.NetworkConfig) {
 	rand.Seed(time.Now().UnixNano())
 
 	// Randomly add a new neuron in an existing hidden layer
 	if rand.Float64() < 0.3 { // 30% chance to add a neuron
 		for i := range config.Layers.Hidden {
 			newNeuronID := fmt.Sprintf("new_neuron_%d", rand.Intn(1000))
-			newNeuron := cortexbuilder.Neuron{
+			newNeuron := dense.Neuron{
 				ActivationType: "relu",
-				Connections:    make(map[string]cortexbuilder.Connection),
+				Connections:    make(map[string]dense.Connection),
 				Bias:           rand.NormFloat64(),
 			}
 			for inputID := range config.Layers.Input.Neurons {
-				newNeuron.Connections[inputID] = cortexbuilder.Connection{
+				newNeuron.Connections[inputID] = dense.Connection{
 					Weight: rand.NormFloat64(),
 				}
 			}
@@ -138,20 +138,20 @@ func mutateNetwork(config *cortexbuilder.NetworkConfig) {
 
 	// Randomly add a new hidden layer
 	if rand.Float64() < 0.2 { // 20% chance to add a new hidden layer
-		newLayer := cortexbuilder.Layer{
-			Neurons: map[string]cortexbuilder.Neuron{},
+		newLayer := dense.Layer{
+			Neurons: map[string]dense.Neuron{},
 		}
 		for i := 0; i < rand.Intn(3)+1; i++ { // Add 1 to 3 neurons in this new layer
 			newNeuronID := fmt.Sprintf("new_hidden_neuron_%d", rand.Intn(1000))
-			newNeuron := cortexbuilder.Neuron{
+			newNeuron := dense.Neuron{
 				ActivationType: "relu",
-				Connections:    make(map[string]cortexbuilder.Connection),
+				Connections:    make(map[string]dense.Connection),
 				Bias:           rand.NormFloat64(),
 			}
 			// Connect to previous layer's neurons
 			if len(config.Layers.Hidden) > 0 {
 				for prevNeuronID := range config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons {
-					newNeuron.Connections[prevNeuronID] = cortexbuilder.Connection{
+					newNeuron.Connections[prevNeuronID] = dense.Connection{
 						Weight: rand.NormFloat64(),
 					}
 				}
@@ -166,7 +166,7 @@ func mutateNetwork(config *cortexbuilder.NetworkConfig) {
 		for nodeID, neuron := range layer.Neurons {
 			// Randomly tweak weights
 			for inputID := range neuron.Connections {
-				neuron.Connections[inputID] = cortexbuilder.Connection{
+				neuron.Connections[inputID] = dense.Connection{
 					Weight: neuron.Connections[inputID].Weight + rand.NormFloat64()*0.1,
 				}
 			}
@@ -178,16 +178,16 @@ func mutateNetwork(config *cortexbuilder.NetworkConfig) {
 }
 
 // DeepCopy creates a deep copy of the NetworkConfig to avoid concurrent map access
-func deepCopyNetworkConfig(original *cortexbuilder.NetworkConfig) *cortexbuilder.NetworkConfig {
+func deepCopyNetworkConfig(original *dense.NetworkConfig) *dense.NetworkConfig {
 	copyData, _ := json.Marshal(original)
-	var copy cortexbuilder.NetworkConfig
+	var copy dense.NetworkConfig
 	json.Unmarshal(copyData, &copy)
 	return &copy
 }
 
 func main() {
 	// Run all benchmarks and capture the 8 return values
-	ops32Single, ops64Single, ops32Multi, ops64Multi, maxLayers32Single, maxLayers64Single, maxLayers32Multi, maxLayers64Multi := cortexbuilder.RunAllBenchmarks()
+	ops32Single, ops64Single, ops32Multi, ops64Multi, maxLayers32Single, maxLayers64Single, maxLayers32Multi, maxLayers64Multi := dense.RunAllBenchmarks()
 
 	// Output the results
 	fmt.Printf("Results:\n")
@@ -213,7 +213,7 @@ func test1main() {
 	}
 
 	// Step 3: Create test network configuration
-	config := cortexbuilder.CreateTestNetworkConfig()
+	config := dense.CreateTestNetworkConfig()
 
 	// Step 4: Evaluate the initial network performance
 	bestError := evaluateNetwork(config, testData)
@@ -231,7 +231,7 @@ func test1main() {
 
 	// Step 6: Start the hill climbing optimization
 	var wg sync.WaitGroup
-	mutatedConfigs := make(chan *cortexbuilder.NetworkConfig, 10)
+	mutatedConfigs := make(chan *dense.NetworkConfig, 10)
 	errors := make(chan float64, 10)
 
 	for i := 0; i < 4; i++ { // Run 4 parallel workers

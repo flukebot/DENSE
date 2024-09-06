@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"syscall/js"
 
-	"cortexbuilder" // Import the cortexbuilder package directly
+	"dense" // Import the dense package directly
 )
 
 func feedforwardWrapper(this js.Value, p []js.Value) interface{} {
-	var config cortexbuilder.NetworkConfig
+	var config dense.NetworkConfig
 	inputs := make(map[string]float64)
 
 	err := json.Unmarshal([]byte(p[0].String()), &config)
@@ -20,7 +20,7 @@ func feedforwardWrapper(this js.Value, p []js.Value) interface{} {
 		return err.Error()
 	}
 
-	outputs := cortexbuilder.Feedforward(&config, inputs)
+	outputs := dense.Feedforward(&config, inputs)
 
 	outputJSON, err := json.Marshal(outputs)
 	if err != nil {

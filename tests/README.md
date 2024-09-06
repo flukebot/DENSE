@@ -1,6 +1,6 @@
-# Tests for CortexBuilder
+# Tests for dense
 
-This folder contains the test suite for the CortexBuilder project. The tests are designed to validate the functionality of the neural network implementation, including its ability to correctly configure networks, perform feedforward operations, and optimize network parameters using random hill climbing.
+This folder contains the test suite for the dense project. The tests are designed to validate the functionality of the neural network implementation, including its ability to correctly configure networks, perform feedforward operations, and optimize network parameters using random hill climbing.
 
 ## Overview of Tests
 
