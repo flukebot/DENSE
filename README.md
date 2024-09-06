@@ -92,9 +92,11 @@ This table outlines all the key elements that need to be worked on, but no imple
 
 
 
-![Exploration Path to GoWASM](./explorationPathToGoWASM.png)
+
 
 ### Process of Elimination
+
+![Exploration Path to GoWASM](./explorationPathToGoWASM.png)
 
 1. **Initial Considerations**:
    - **Python**: Known for its simplicity and extensive machine learning libraries, Python was initially considered. However, its slower execution speed and the overhead associated with interpreted languages made it less suitable for high-performance neural network operations in a web environment.
