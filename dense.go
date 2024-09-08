@@ -264,3 +264,42 @@ func TestNeuralNetwork(config *NetworkConfig, testData []TestData) {
 		fmt.Printf("Actual Outputs: %v\n\n", outputs)
 	}
 }
+
+
+// Create a random neural network configuration for testing
+func CreateRandomNetworkConfig() *NetworkConfig {
+	config := &NetworkConfig{}
+	config.Layers.Input.Neurons = map[string]Neuron{
+		"input1": {},
+		"input2": {},
+		"input3": {},
+	}
+
+	config.Layers.Hidden = []Layer{
+		{
+			Neurons: map[string]Neuron{
+				"hidden1": {
+					ActivationType: "relu",
+					Connections: map[string]Connection{
+						"input1": {Weight: rand.Float64()},
+						"input2": {Weight: rand.Float64()},
+						"input3": {Weight: rand.Float64()},
+					},
+					Bias: rand.Float64(),
+				},
+			},
+		},
+	}
+
+	config.Layers.Output.Neurons = map[string]Neuron{
+		"output1": {
+			ActivationType: "sigmoid",
+			Connections: map[string]Connection{
+				"hidden1": {Weight: rand.Float64()},
+			},
+			Bias: rand.Float64(),
+		},
+	}
+
+	return config
+}

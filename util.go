@@ -3,6 +3,7 @@ package dense
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 )
 
 // LoadNetworkConfig loads the neural network configuration from a JSON file.
@@ -21,4 +22,37 @@ func LoadNetworkConfig(filename string) (*NetworkConfig, error) {
 	}
 
 	return &networkConfig, nil
+}
+
+
+// Load a network configuration from a JSON file
+func LoadNetworkFromFile(filename string) (*NetworkConfig, error) {
+	data, err := readFromFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	var config NetworkConfig
+	err = json.Unmarshal(data, &config)
+	return &config, err
+}
+
+
+// Helper functions for file IO
+func writeToFile(filename string, data []byte) error {
+	return os.WriteFile(filename, data, 0644)
+}
+
+func readFromFile(filename string) ([]byte, error) {
+	return os.ReadFile(filename)
+}
+
+
+// Save the network configuration as a JSON file
+func SaveNetworkToFile(config *NetworkConfig, filename string) error {
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	err = writeToFile(filename, data)
+	return err
 }
