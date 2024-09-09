@@ -1,40 +1,38 @@
 package dense
 
 import (
-	"encoding/json"
-	"fmt"
 	"math"
 	"math/rand"
-	"time"
-	"sync"
+	"strconv"
 )
 
+// Connection represents a connection between two neurons with a weight.
 type Connection struct {
 	Weight float64 `json:"weight"`
 }
 
+// Neuron represents a neuron with an activation function, connections, and a bias.
 type Neuron struct {
 	ActivationType string                `json:"activationType"`
 	Connections    map[string]Connection `json:"connections"`
 	Bias           float64               `json:"bias"`
 }
 
+// Layer represents a layer of neurons in the network.
 type Layer struct {
 	Neurons map[string]Neuron `json:"neurons"`
 }
 
+// NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers.
 type NetworkConfig struct {
-    Layers struct {
-        Input  Layer   `json:"input"`
-        Hidden []Layer `json:"hidden"`
-        Output Layer   `json:"output"`
-    } `json:"layers"`
-
-    // Add the mutex for thread-safe access
-    mutex sync.RWMutex 
+	Layers struct {
+		Input  Layer   `json:"input"`
+		Hidden []Layer `json:"hidden"`
+		Output Layer   `json:"output"`
+	} `json:"layers"`
 }
 
-
+// Activate function calculates the activation value based on the activation type.
 func activate(activationType string, input float64) float64 {
 	switch activationType {
 	case "relu":
@@ -72,247 +70,160 @@ func activate(activationType string, input float64) float64 {
 	}
 }
 
+// Feedforward processes the input values through the network and returns the output values.
 func Feedforward(config *NetworkConfig, inputValues map[string]float64) map[string]float64 {
-    config.mutex.RLock() // Lock for reading
-    defer config.mutex.RUnlock() // Unlock after reading
+	neurons := make(map[string]float64)
 
-    neurons := make(map[string]float64)
-
-    // Load inputs into the neuron map
-    for inputID := range config.Layers.Input.Neurons {
-        neurons[inputID] = inputValues[inputID]
-    }
-
-    // Process hidden layers
-    for _, layer := range config.Layers.Hidden {
-        for nodeID, node := range layer.Neurons {
-            sum := 0.0
-            for inputID, connection := range node.Connections {
-                sum += neurons[inputID] * connection.Weight
-            }
-            sum += node.Bias
-            neurons[nodeID] = activate(node.ActivationType, sum)
-        }
-    }
-
-    // Process output layer
-    outputs := make(map[string]float64)
-    for nodeID, node := range config.Layers.Output.Neurons {
-        sum := 0.0
-        for inputID, connection := range node.Connections {
-            sum += neurons[inputID] * connection.Weight
-        }
-        sum += node.Bias
-        outputs[nodeID] = activate(node.ActivationType, sum)
-    }
-
-    return outputs
-}
-
-
-
-func RandomizeModelOnlyLayer() string {
-	rand.Seed(time.Now().UnixNano())
-	activationTypes := []string{"relu", "sigmoid", "tanh", "softmax", "leaky_relu", "swish", "elu", "selu", "softplus"}
-	activationType := activationTypes[rand.Intn(len(activationTypes))]
-
-	weight1 := rand.NormFloat64()
-	bias := rand.NormFloat64()
-
-	model := map[string]interface{}{
-		"layers": map[string]interface{}{
-			"hidden": []map[string]interface{}{
-				{
-					"neurons": map[string]interface{}{
-						"4": map[string]interface{}{
-							"activationType": activationType,
-							"connections": map[string]interface{}{
-								"1": map[string]interface{}{
-									"weight": weight1,
-								},
-							},
-							"bias": bias,
-						},
-					},
-				},
-			},
-		},
+	// Load input values into the neurons
+	for inputID := range config.Layers.Input.Neurons {
+		neurons[inputID] = inputValues[inputID]
 	}
 
-	modelJSON, _ := json.Marshal(model)
-	return string(modelJSON)
+	// Process hidden layers
+	for _, layer := range config.Layers.Hidden {
+		for nodeID, node := range layer.Neurons {
+			sum := 0.0
+			for inputID, connection := range node.Connections {
+				sum += neurons[inputID] * connection.Weight
+			}
+			sum += node.Bias
+			neurons[nodeID] = activate(node.ActivationType, sum)
+		}
+	}
+
+	// Process output layer
+	outputs := make(map[string]float64)
+	for nodeID, node := range config.Layers.Output.Neurons {
+		sum := 0.0
+		for inputID, connection := range node.Connections {
+			sum += neurons[inputID] * connection.Weight
+		}
+		sum += node.Bias
+		outputs[nodeID] = activate(node.ActivationType, sum)
+	}
+
+	return outputs
 }
 
+// RandomWeight generates a random weight for connections.
 func RandomWeight() float64 {
 	return rand.NormFloat64()
 }
 
-func RandomizeNetworkStaticTesting() string {
-	model := map[string]interface{}{
-		"layers": map[string]interface{}{
-			"input": map[string]interface{}{
-				"neurons": map[string]interface{}{
-					"1": map[string]interface{}{},
-					"2": map[string]interface{}{},
-					"3": map[string]interface{}{},
-				},
-			},
-			"hidden": []map[string]interface{}{
-				{
-					"neurons": map[string]interface{}{
-						"4": map[string]interface{}{
-							"activationType": "relu",
-							"connections": map[string]interface{}{
-								"1": map[string]interface{}{
-									"weight": RandomWeight(),
-								},
-							},
-							"bias": rand.Float64(),
-						},
-					},
-				},
-			},
-			"output": map[string]interface{}{
-				"neurons": map[string]interface{}{
-					"5": map[string]interface{}{
-						"activationType": "sigmoid",
-						"connections": map[string]interface{}{
-							"4": map[string]interface{}{
-								"weight": RandomWeight(),
-							},
-						},
-						"bias": rand.Float64(),
-					},
-					"6": map[string]interface{}{
-						"activationType": "sigmoid",
-						"connections": map[string]interface{}{
-							"4": map[string]interface{}{
-								"weight": RandomWeight(),
-							},
-						},
-						"bias": rand.Float64(),
-					},
-					"7": map[string]interface{}{
-						"activationType": "sigmoid",
-						"connections": map[string]interface{}{
-							"4": map[string]interface{}{
-								"weight": RandomWeight(),
-							},
-						},
-						"bias": rand.Float64(),
-					},
-				},
-			},
-		},
-	}
-
-	modelJSON, _ := json.MarshalIndent(model, "", "  ")
-	return string(modelJSON)
-}
-
-// The following are the new additions based on the errors encountered
-
-type TestData struct {
-	Inputs  map[string]float64
-	Outputs map[string]float64
-}
-
-func CreateTestNetworkConfig() *NetworkConfig {
+// CreateRandomNetworkConfig dynamically generates a network with specified input and output sizes and allows dynamic configuration of output neurons.
+func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes []string) *NetworkConfig {
 	config := &NetworkConfig{}
-	config.Layers.Input.Neurons = map[string]Neuron{
-		"input1": {},
-		"input2": {},
-		"input3": {},
+
+	// Define input neurons
+	config.Layers.Input.Neurons = make(map[string]Neuron)
+	for i := 0; i < numInputs; i++ {
+		neuronID := "input" + strconv.Itoa(i)
+		config.Layers.Input.Neurons[neuronID] = Neuron{}
 	}
 
+	// Define hidden layers with random weights and biases
 	config.Layers.Hidden = []Layer{
 		{
 			Neurons: map[string]Neuron{
 				"hidden1": {
 					ActivationType: "relu",
-					Connections: map[string]Connection{
-						"input1": {Weight: 0.5},
-						"input2": {Weight: 0.6},
-						"input3": {Weight: 0.7},
-					},
-					Bias: 0.1,
-				},
-			},
-		},
-	}
-
-	config.Layers.Output.Neurons = map[string]Neuron{
-		"output1": {
-			ActivationType: "sigmoid",
-			Connections: map[string]Connection{
-				"hidden1": {Weight: 0.8},
-			},
-			Bias: 0.2,
-		},
-		"output2": {
-			ActivationType: "sigmoid",
-			Connections: map[string]Connection{
-				"hidden1": {Weight: 0.9},
-			},
-			Bias: 0.3,
-		},
-		"output3": {
-			ActivationType: "sigmoid",
-			Connections: map[string]Connection{
-				"hidden1": {Weight: 1.0},
-			},
-			Bias: 0.4,
-		},
-	}
-
-	return config
-}
-
-func TestNeuralNetwork(config *NetworkConfig, testData []TestData) {
-	for i, data := range testData {
-		outputs := Feedforward(config, data.Inputs)
-		fmt.Printf("Test Case %d:\n", i+1)
-		fmt.Printf("Inputs: %v\n", data.Inputs)
-		fmt.Printf("Expected Outputs: %v\n", data.Outputs)
-		fmt.Printf("Actual Outputs: %v\n\n", outputs)
-	}
-}
-
-
-// Create a random neural network configuration for testing
-func CreateRandomNetworkConfig() *NetworkConfig {
-	config := &NetworkConfig{}
-	config.Layers.Input.Neurons = map[string]Neuron{
-		"input1": {},
-		"input2": {},
-		"input3": {},
-	}
-
-	config.Layers.Hidden = []Layer{
-		{
-			Neurons: map[string]Neuron{
-				"hidden1": {
-					ActivationType: "relu",
-					Connections: map[string]Connection{
-						"input1": {Weight: rand.Float64()},
-						"input2": {Weight: rand.Float64()},
-						"input3": {Weight: rand.Float64()},
-					},
+					Connections: func() map[string]Connection {
+						connections := make(map[string]Connection)
+						for i := 0; i < numInputs; i++ {
+							connections["input"+strconv.Itoa(i)] = Connection{Weight: rand.Float64()}
+						}
+						return connections
+					}(),
 					Bias: rand.Float64(),
 				},
 			},
 		},
 	}
 
-	config.Layers.Output.Neurons = map[string]Neuron{
-		"output1": {
-			ActivationType: "sigmoid",
+	// Define output neurons with customizable activation types, random weights, and biases
+	config.Layers.Output.Neurons = make(map[string]Neuron)
+	for i := 0; i < numOutputs; i++ {
+		neuronID := "output" + strconv.Itoa(i)
+		activationType := "sigmoid" // Default activation function
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
+
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
 			Connections: map[string]Connection{
 				"hidden1": {Weight: rand.Float64()},
 			},
 			Bias: rand.Float64(),
-		},
+		}
 	}
 
 	return config
+}
+
+// DeepCopy creates a deep copy of the NetworkConfig, so each goroutine works on its own copy.
+func DeepCopy(config *NetworkConfig) *NetworkConfig {
+	// Initialize a new config with the correct struct type (including json tags)
+	newConfig := &NetworkConfig{
+		Layers: struct {
+			Input  Layer   `json:"input"`
+			Hidden []Layer `json:"hidden"`
+			Output Layer   `json:"output"`
+		}{
+			Input: Layer{
+				Neurons: make(map[string]Neuron),
+			},
+			Hidden: make([]Layer, len(config.Layers.Hidden)),
+			Output: Layer{
+				Neurons: make(map[string]Neuron),
+			},
+		},
+	}
+
+	// Copy input layer neurons
+	for key, neuron := range config.Layers.Input.Neurons {
+		newNeuron := Neuron{
+			ActivationType: neuron.ActivationType,
+			Bias:           neuron.Bias,
+			Connections:    make(map[string]Connection),
+		}
+		for connKey, conn := range neuron.Connections {
+			newNeuron.Connections[connKey] = conn
+		}
+		newConfig.Layers.Input.Neurons[key] = newNeuron
+	}
+
+	// Copy hidden layers and neurons
+	for i, layer := range config.Layers.Hidden {
+		newLayer := Layer{
+			Neurons: make(map[string]Neuron),
+		}
+		for key, neuron := range layer.Neurons {
+			newNeuron := Neuron{
+				ActivationType: neuron.ActivationType,
+				Bias:           neuron.Bias,
+				Connections:    make(map[string]Connection),
+			}
+			for connKey, conn := range neuron.Connections {
+				newNeuron.Connections[connKey] = conn
+			}
+			newLayer.Neurons[key] = newNeuron
+		}
+		newConfig.Layers.Hidden[i] = newLayer
+	}
+
+	// Copy output layer neurons
+	for key, neuron := range config.Layers.Output.Neurons {
+		newNeuron := Neuron{
+			ActivationType: neuron.ActivationType,
+			Bias:           neuron.Bias,
+			Connections:    make(map[string]Connection),
+		}
+		for connKey, conn := range neuron.Connections {
+			newNeuron.Connections[connKey] = conn
+		}
+		newConfig.Layers.Output.Neurons[key] = newNeuron
+	}
+
+	return newConfig
 }

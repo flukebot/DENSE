@@ -18,9 +18,6 @@ const (
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
 
-    config.mutex.Lock() // Lock for writing
-    defer config.mutex.Unlock() // Unlock after mutation
-
     // Randomly select the mutation type to apply
     switch rand.Intn(3) {
     case int(MutateWeight):
@@ -166,15 +163,9 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
     }
 }
 
-func AddLayer(config *NetworkConfig, mutationRate int) {
-    // Ensure mutationRate is within bounds
-    if mutationRate < 0 {
-        mutationRate = 0
-    } else if mutationRate > 100 {
-        mutationRate = 100
-    }
 
-    // Randomly decide if we should add a layer based on the mutation rate
+// AddLayer adds a new hidden layer with random neurons to the network
+func AddLayer(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             Neurons: make(map[string]Neuron),
@@ -190,7 +181,7 @@ func AddLayer(config *NetworkConfig, mutationRate int) {
                 Bias:           rand.NormFloat64(),
             }
 
-            // Connect the new neuron to the previous layer
+            // Connect the new neuron to the previous layer's neurons
             var previousLayerNeurons map[string]Neuron
             if len(config.Layers.Hidden) == 0 {
                 previousLayerNeurons = config.Layers.Input.Neurons
@@ -203,22 +194,26 @@ func AddLayer(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
+            fmt.Printf("Added neuron %s to new layer with connections to previous layer\n", neuronID)
         }
 
-        // Connect the new layer to the output layer
+        // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
+        if len(config.Layers.Hidden) == 0 {
+            fmt.Println("Connecting new layer to the output layer directly")
+        }
         for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
-            newConnections := make(map[string]Connection)
             for newNeuronID := range newLayer.Neurons {
-                newConnections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
+                outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
+                fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
             }
-            outputNeuron.Connections = newConnections
-            config.Layers.Output.Neurons[outputNeuronID] = outputNeuron
         }
 
+        // Append the new layer to the hidden layers
         config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
         fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
     }
 }
+
 
 // Helper function to choose a random activation function
 func randomActivationType() string {
