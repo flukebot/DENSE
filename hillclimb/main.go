@@ -17,9 +17,6 @@ type Result struct {
 	config    *dense.NetworkConfig
 }
 
-// Mutex for safe printing
-var printMutex sync.Mutex
-
 // EvaluateFitness will now train the network using the MNIST data and calculate accuracy
 func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *rand.Rand) float64 {
 	correct := 0
@@ -60,51 +57,67 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 }
 
 func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, iterations int, learningRate float64) {
-	bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
-	bestConfig := config
-	numWorkers := 4
-	results := make(chan Result, numWorkers)
-	var wg sync.WaitGroup
+    bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
+    bestConfig := config
 
-	for i := 0; i < iterations; i++ {
-		wg.Add(1)
-		go func(iteration int) {
-			defer wg.Done()
+    batchSize := 5  // How many iterations to do in a single batch
+    for i := 0; i < iterations; i += batchSize {
 
-			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(iteration))) // Independent RNG per goroutine
-			currentConfig := *bestConfig
-			dense.MutateWeights(&currentConfig, learningRate)
-			newFitness := evaluateFitness(&currentConfig, mnist, rng)
+        var wg sync.WaitGroup
+        results := make(chan Result, batchSize)
 
-			results <- Result{
-				fitness:   newFitness,
-				iteration: iteration,
-				config:    &currentConfig,
-			}
-		}(i)
-	}
+        // Run a batch of workers
+        for j := 0; j < batchSize; j++ {
+            wg.Add(1)
+            go func(iteration int) {
+                defer wg.Done()
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+                // Create an independent RNG for each worker
+                rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(iteration)))
 
-	for result := range results {
-		if result.fitness > bestFitness {
-			bestFitness = result.fitness
-			bestConfig = result.config
-			printMutex.Lock() // Lock console output to avoid race conditions
-			fmt.Printf("Iteration %d: Found better model with accuracy %.4f\n", result.iteration, bestFitness*100)
-			dense.SaveNetworkToFile(bestConfig, fmt.Sprintf("model_iteration_%d.json", result.iteration))
-			printMutex.Unlock()
-		}
-	}
+                config.mutex.RLock()  // Lock for reading before copying config
+                currentConfig := *bestConfig
+                config.mutex.RUnlock()  // Unlock after reading
 
-	dense.SaveNetworkToFile(bestConfig, "best_model.json")
-	printMutex.Lock()
-	fmt.Println("Best model saved to best_model.json")
-	printMutex.Unlock()
+                // Apply a mutation to the copied config
+                dense.MutateNetwork(&currentConfig, learningRate, 30)
+
+                // Evaluate the new configuration's fitness
+                newFitness := evaluateFitness(&currentConfig, mnist, rng)
+
+                results <- Result{
+                    fitness:   newFitness,
+                    iteration: iteration,
+                    config:    &currentConfig,
+                }
+            }(i + j)
+        }
+
+        // Wait for all workers in this batch to finish
+        wg.Wait()
+        close(results)
+
+        // Evaluate results after batch
+        for result := range results {
+            if result.fitness > bestFitness {
+                bestFitness = result.fitness
+                config.mutex.Lock()  // Lock for writing before updating the bestConfig
+                bestConfig = result.config
+                config.mutex.Unlock()  // Unlock after writing
+
+                fmt.Printf("Iteration %d: New best model with accuracy %.4f%%\n", result.iteration, bestFitness*100)
+                dense.SaveNetworkToFile(bestConfig, "best_model.json")
+            }
+        }
+
+        fmt.Printf("Batch ending at iteration %d: Current best accuracy %.4f%%\n", i+batchSize, bestFitness*100)
+    }
+
+    // Final best model save
+    dense.SaveNetworkToFile(bestConfig, "final_best_model.json")
+    fmt.Printf("Final best model saved with accuracy: %.4f%%\n", bestFitness*100)
 }
+
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -129,10 +142,10 @@ func main() {
 	fmt.Println("Starting hill climbing optimization...")
 
 	// Run hill climbing optimization
-	hillClimbingOptimize(config, mnist, 100, 0.05)
+	hillClimbingOptimize(config, mnist, 1000, 0.1)
 
 	// Load and print the best saved model
-	loadedConfig, err := dense.LoadNetworkFromFile("best_model.json")
+	loadedConfig, err := dense.LoadNetworkFromFile("final_best_model.json")
 	if err != nil {
 		fmt.Println("Error loading model:", err)
 		return

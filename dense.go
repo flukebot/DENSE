@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"time"
+	"sync"
 )
 
 type Connection struct {
@@ -23,12 +24,16 @@ type Layer struct {
 }
 
 type NetworkConfig struct {
-	Layers struct {
-		Input  Layer   `json:"input"`
-		Hidden []Layer `json:"hidden"`
-		Output Layer   `json:"output"`
-	} `json:"layers"`
+    Layers struct {
+        Input  Layer   `json:"input"`
+        Hidden []Layer `json:"hidden"`
+        Output Layer   `json:"output"`
+    } `json:"layers"`
+
+    // Add the mutex for thread-safe access
+    mutex sync.RWMutex 
 }
+
 
 func activate(activationType string, input float64) float64 {
 	switch activationType {
@@ -68,35 +73,43 @@ func activate(activationType string, input float64) float64 {
 }
 
 func Feedforward(config *NetworkConfig, inputValues map[string]float64) map[string]float64 {
-	neurons := make(map[string]float64)
+    config.mutex.RLock() // Lock for reading
+    defer config.mutex.RUnlock() // Unlock after reading
 
-	for inputID := range config.Layers.Input.Neurons {
-		neurons[inputID] = inputValues[inputID]
-	}
+    neurons := make(map[string]float64)
 
-	for _, layer := range config.Layers.Hidden {
-		for nodeID, node := range layer.Neurons {
-			sum := 0.0
-			for inputID, connection := range node.Connections {
-				sum += neurons[inputID] * connection.Weight
-			}
-			sum += node.Bias
-			neurons[nodeID] = activate(node.ActivationType, sum)
-		}
-	}
+    // Load inputs into the neuron map
+    for inputID := range config.Layers.Input.Neurons {
+        neurons[inputID] = inputValues[inputID]
+    }
 
-	outputs := make(map[string]float64)
-	for nodeID, node := range config.Layers.Output.Neurons {
-		sum := 0.0
-		for inputID, connection := range node.Connections {
-			sum += neurons[inputID] * connection.Weight
-		}
-		sum += node.Bias
-		outputs[nodeID] = activate(node.ActivationType, sum)
-	}
+    // Process hidden layers
+    for _, layer := range config.Layers.Hidden {
+        for nodeID, node := range layer.Neurons {
+            sum := 0.0
+            for inputID, connection := range node.Connections {
+                sum += neurons[inputID] * connection.Weight
+            }
+            sum += node.Bias
+            neurons[nodeID] = activate(node.ActivationType, sum)
+        }
+    }
 
-	return outputs
+    // Process output layer
+    outputs := make(map[string]float64)
+    for nodeID, node := range config.Layers.Output.Neurons {
+        sum := 0.0
+        for inputID, connection := range node.Connections {
+            sum += neurons[inputID] * connection.Weight
+        }
+        sum += node.Bias
+        outputs[nodeID] = activate(node.ActivationType, sum)
+    }
+
+    return outputs
 }
+
+
 
 func RandomizeModelOnlyLayer() string {
 	rand.Seed(time.Now().UnixNano())
