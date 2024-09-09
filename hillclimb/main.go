@@ -37,17 +37,17 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 		}
 
 		// Debug: Print the input data for the first few images to ensure it's being loaded correctly
-		if i < 3 { // Print only for the first 3 images for clarity
+		/*if i < 3 { // Print only for the first 3 images for clarity
 			fmt.Printf("Image %d input data: %v\n", i, input)
-		}
+		}*/
 
 		// Get the expected label
 		expectedLabel := mnist.Labels[i]
 
 		// Debug: Print the expected label for the first few images
-		if i < 3 {
+		/*if i < 3 {
 			fmt.Printf("Image %d expected label: %d\n", i, expectedLabel)
-		}
+		}*/
 
 		// Get the network's prediction
 		outputs := dense.Feedforward(config, input)
@@ -56,9 +56,9 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 		predictedLabel := int(outputs["output0"] * 9.0) // Scale the output to get a number between 0 and 9
 
 		// Debug: Print the predicted label and the outputs for the first few images
-		if i < 3 {
+		/*if i < 3 {
 			fmt.Printf("Image %d predicted label: %d, output: %v\n", i, predictedLabel, outputs)
-		}
+		}*/
 
 		// Compare predicted label with actual label
 		if predictedLabel == int(expectedLabel) {
@@ -80,7 +80,7 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
     bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
     bestConfig := config
 
-    batchSize := 5 // How many iterations to do in a single batch
+    batchSize := 10 // How many iterations to do in a single batch
     for i := 0; i < iterations; i += batchSize {
 
         var wg sync.WaitGroup
@@ -167,7 +167,7 @@ func main() {
 	fmt.Println("Starting hill climbing optimization...")
 
 	// Run hill climbing optimization
-	hillClimbingOptimize(config, mnist, 20, 0.1)
+	hillClimbingOptimize(config, mnist, 500, 0.1)
 
 	// Load and print the best saved model
 	loadedConfig, err := dense.LoadNetworkFromFile("final_best_model.json")
