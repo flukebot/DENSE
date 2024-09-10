@@ -47,7 +47,7 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 	return accuracy
 }
 
-func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, iterations int, learningRate float64) {
+func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, iterations int, learningRate float64) float64{
 	bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
 	bestConfig := config
 
@@ -90,7 +90,8 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
 	}
 
 	dense.SaveNetworkToFile(bestConfig, "final_best_model.json")
-	fmt.Printf("Final best model saved with accuracy: %.4f%%\n", bestFitness*100)
+	//fmt.Printf("Final best model saved with accuracy: %.4f%%\n", bestFitness*100)
+	return bestFitness*100
 }
 
 func modelExists(filename string) bool {
@@ -133,8 +134,30 @@ func main() {
 
 	fmt.Println("Starting hill climbing optimization...")
 
+
+	desiredAccuracy := 0.60
+	maxDuration := 12 * time.Hour
+
+	startTime := time.Now()
+	var bestFitness float64
+
+	for {
+		bestFitness = hillClimbingOptimize(config, mnist, 10, 0.1)
+		fmt.Printf("Current best model accuracy: %.4f%%\n", bestFitness*100)
+
+		// Check if the desired accuracy is reached or if the time limit is exceeded
+		if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
+			break
+		}
+
+		// Sleep for a short duration to avoid tight looping (optional)
+		time.Sleep(1 * time.Second)
+	}
+
+
 	// Run hill climbing optimization
-	hillClimbingOptimize(config, mnist, 500, 0.1)
+	//bestFitness := hillClimbingOptimize(config, mnist, 10, 0.1)
+	//fmt.Printf("Final best model saved with accuracy: %.4f%%\n", bestFitness)
 
 	// Load and print the best saved model
 	loadedConfig, err := dense.LoadNetworkFromFile("final_best_model.json")
