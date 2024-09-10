@@ -135,7 +135,7 @@ func main() {
 	fmt.Println("Starting hill climbing optimization...")
 
 
-	desiredAccuracy := 60
+	desiredAccuracy := 60.0
 	maxDuration := 12 * time.Hour
 
 	startTime := time.Now()
