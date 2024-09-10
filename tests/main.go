@@ -2,6 +2,29 @@ package main
 
 import (
 	"dense"
+	"fmt"
+)
+
+
+func main() {
+	// Run all benchmarks and capture the 8 return values
+	ops32Single, ops64Single, ops32Multi, ops64Multi, maxLayers32Single, maxLayers64Single, maxLayers32Multi, maxLayers64Multi := dense.RunAllBenchmarks()
+
+	// Output the results
+	fmt.Printf("Results:\n")
+	fmt.Printf("Single-threaded Float32 Operations per Second: %s\n", ops32Single)
+	fmt.Printf("Single-threaded Float64 Operations per Second: %s\n", ops64Single)
+	fmt.Printf("Multi-threaded Float32 Operations per Second: %s\n", ops32Multi)
+	fmt.Printf("Multi-threaded Float64 Operations per Second: %s\n", ops64Multi)
+	fmt.Printf("Estimated Maximum Layers with Single-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Single)
+	fmt.Printf("Estimated Maximum Layers with Single-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Single)
+	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Multi)
+	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Multi)
+}
+
+/*
+import (
+	"dense"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -185,21 +208,7 @@ func deepCopyNetworkConfig(original *dense.NetworkConfig) *dense.NetworkConfig {
 	return &copy
 }
 
-func main() {
-	// Run all benchmarks and capture the 8 return values
-	ops32Single, ops64Single, ops32Multi, ops64Multi, maxLayers32Single, maxLayers64Single, maxLayers32Multi, maxLayers64Multi := dense.RunAllBenchmarks()
 
-	// Output the results
-	fmt.Printf("Results:\n")
-	fmt.Printf("Single-threaded Float32 Operations per Second: %s\n", ops32Single)
-	fmt.Printf("Single-threaded Float64 Operations per Second: %s\n", ops64Single)
-	fmt.Printf("Multi-threaded Float32 Operations per Second: %s\n", ops32Multi)
-	fmt.Printf("Multi-threaded Float64 Operations per Second: %s\n", ops64Multi)
-	fmt.Printf("Estimated Maximum Layers with Single-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Single)
-	fmt.Printf("Estimated Maximum Layers with Single-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Single)
-	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float32: %s (assuming 1000 nodes per layer)\n", maxLayers32Multi)
-	fmt.Printf("Estimated Maximum Layers with Multi-threaded Float64: %s (assuming 1000 nodes per layer)\n", maxLayers64Multi)
-}
 
 func test1main() {
 	// Step 1: Create test data
@@ -291,3 +300,4 @@ func test1main() {
 
 	fmt.Printf("Final Best Error: %f\n", bestError)
 }
+*/
