@@ -11,12 +11,32 @@ import (
 )
 
 type Result struct {
-	fitness   float64
-	tmpModel  string
+	fitness  float64
+	tmpModel string
 }
 
-func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *rand.Rand) float64 {
+// Function to split the MNIST data into training (80%) and testing (20%)
+func splitData(mnist *dense.MNISTData) (trainData, testData *dense.MNISTData) {
+	totalImages := len(mnist.Images)
+	splitIndex := int(float64(totalImages) * 0.8)
+
+	trainData = &dense.MNISTData{
+		Images: mnist.Images[:splitIndex],
+		Labels: mnist.Labels[:splitIndex],
+	}
+
+	testData = &dense.MNISTData{
+		Images: mnist.Images[splitIndex:],
+		Labels: mnist.Labels[splitIndex:],
+	}
+
+	return trainData, testData
+}
+
+// Evaluates the fitness of the model using the provided dataset
+func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData) float64 {
 	correct := 0
+	total := len(mnist.Images)
 	for i, image := range mnist.Images {
 		input := make(map[string]float64)
 		for j, pixel := range image {
@@ -29,11 +49,12 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 			correct++
 		}
 	}
-	accuracy := float64(correct) / float64(len(mnist.Images))
+	accuracy := float64(correct) / float64(total)
 	return accuracy
 }
 
-func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, learningRate, fitnessBuffer float64) float64 {
+// Optimization process that runs hill climbing with batching and multithreading
+func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWorkers int, learningRate, fitnessBuffer float64) float64 {
     // Load the best config from the file only once
     bestConfig, err := dense.LoadNetworkFromFile("best_model.json")
     if err != nil {
@@ -41,74 +62,81 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, le
         return 0.0
     }
 
-    bestFitness := evaluateFitness(bestConfig, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
-    fmt.Printf("Starting optimization with initial accuracy: %.4f%%\n", bestFitness*100)
+    // Split data into training and testing sets
+    trainData, testData := splitData(mnist)
 
-    var wg sync.WaitGroup
-    results := make(chan Result, iterations)
+    // Evaluate initial accuracy on the training set
+    bestFitness := evaluateFitness(bestConfig, trainData)
+    fmt.Printf("Starting optimization with initial accuracy (training set): %.4f%%\n", bestFitness*100)
 
-    // Push best model into temporary files for each goroutine
-    for i := 0; i < numWorkers; i++ {
-        tmpModelFilename := fmt.Sprintf("tmp_model_%d.json", i)
-        dense.SaveNetworkToFile(bestConfig, tmpModelFilename) // Save the best model to temp file
-    }
+    for i := 0; i < iterations; i += batchSize {
+        var wg sync.WaitGroup
+        results := make(chan Result, batchSize)
 
-    // Start multiple goroutines, each working with its own temp model
-    for i := 0; i < iterations; i++ {
-        wg.Add(1)
-        go func(workerID int) {
-            defer wg.Done()
-            tmpModelFilename := fmt.Sprintf("tmp_model_%d.json", workerID)
+        // Start a batch of workers
+        for j := 0; j < batchSize; j++ {
+            wg.Add(1)
+            go func(workerID int) {
+                defer wg.Done()
+                tmpModelFilename := fmt.Sprintf("tmp_model_%d.json", workerID)
 
-            // Load the temporary model file for this worker
-            currentConfig, err := dense.LoadNetworkFromFile(tmpModelFilename)
-            if err != nil {
-                fmt.Println("Error loading temp model:", err)
-                return
-            }
+                // Load the temporary model file for this worker
+                currentConfig, err := dense.LoadNetworkFromFile("best_model.json")
+                if err != nil {
+                    fmt.Println("Error loading best model during iteration:", err)
+                    return
+                }
 
-            // Mutate the model and evaluate its fitness
-            dense.MutateNetwork(currentConfig, learningRate, 30)
-            newFitness := evaluateFitness(currentConfig, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
+                // Mutate the model and evaluate its fitness
+                dense.MutateNetwork(currentConfig, learningRate, 30)
+                newFitness := evaluateFitness(currentConfig, trainData) // Evaluate on training data
 
-            // Save mutated model to the temporary file again
-            dense.SaveNetworkToFile(currentConfig, tmpModelFilename)
+                // Save mutated model to the temporary file again
+                dense.SaveNetworkToFile(currentConfig, tmpModelFilename)
 
-            results <- Result{fitness: newFitness, tmpModel: tmpModelFilename}
-        }(i % numWorkers) // Reuse workers by assigning % numWorkers
-    }
-
-    // Use a separate goroutine to close the results channel once all goroutines have finished
-    go func() {
-        wg.Wait()
-        close(results)
-    }()
-
-    // After all threads finish, evaluate the results
-    for result := range results {
-        if result.fitness > bestFitness+fitnessBuffer {
-            bestFitness = result.fitness
-            // Load the best temp model and save it as the new best model
-            tmpConfig, err := dense.LoadNetworkFromFile(result.tmpModel)
-            if err != nil {
-                fmt.Println("Error loading temp model:", err)
-                continue
-            }
-            dense.SaveNetworkToFile(tmpConfig, "best_model.json") // Overwrite the best model
-            fmt.Printf("New best model found with accuracy: %.4f%%\n", bestFitness*100)
+                results <- Result{fitness: newFitness, tmpModel: tmpModelFilename}
+            }(j % numWorkers) // Distribute jobs across workers
         }
 
-        // Delete the temporary model file after it's no longer needed
-        err = os.Remove(result.tmpModel)
-        if err != nil {
-            fmt.Printf("Warning: Failed to delete temp model file: %s\n", result.tmpModel)
+        // Wait for the batch to complete
+        go func() {
+            wg.Wait()
+            close(results) // Only close the channel after all Goroutines are done
+        }()
+
+        // After all threads finish in the batch, evaluate the results
+        for result := range results {
+            if result.fitness > bestFitness+fitnessBuffer {
+                bestFitness = result.fitness
+                // Load the best temp model and save it as the new best model
+                tmpConfig, err := dense.LoadNetworkFromFile(result.tmpModel)
+                if err != nil {
+                    fmt.Println("Error loading temp model:", err)
+                    continue
+                }
+                dense.SaveNetworkToFile(tmpConfig, "best_model.json") // Overwrite the best model
+                fmt.Printf("New best model found with accuracy: %.4f%%\n", bestFitness*100)
+            }
+
+            // Delete the temporary model file after it's no longer needed
+            err = os.Remove(result.tmpModel)
+            if err != nil {
+                fmt.Printf("Warning: Failed to delete temp model file: %s\n", result.tmpModel)
+            }
         }
+
+        fmt.Printf("\nBatch ending at iteration %d: Current best accuracy: %.4f%%\n", i+batchSize, bestFitness*100)
+    }
+
+    // After hill climbing, evaluate on the test data
+    finalConfig, err := dense.LoadNetworkFromFile("best_model.json")
+    if err == nil {
+        testAccuracy := evaluateFitness(finalConfig, testData) // Evaluate on test data
+        fmt.Printf("Final model accuracy on test set: %.4f%%\n", testAccuracy*100)
     }
 
     return bestFitness * 100
 }
-
-
 
 func modelExists(filename string) bool {
 	_, err := os.Stat(filename)
@@ -147,11 +175,13 @@ func main() {
 	desiredAccuracy := 80.0
 	maxDuration := 12 * time.Hour
 	startTime := time.Now()
+
 	numWorkers := 10 // Adjust this based on your system's capabilities
+	batchSize := 10  // Set the batch size
 
 	for {
-		bestFitness := hillClimbingOptimize(mnist, 100, numWorkers, 0.1, 0.0001)
-		fmt.Printf("Current best model accuracy: %.4f%%\n", bestFitness)
+		bestFitness := hillClimbingOptimize(mnist, 100, batchSize, numWorkers, 0.1, 0.0001)
+		fmt.Printf("Current best model accuracy (training set): %.4f%%\n", bestFitness)
 
 		if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
 			break
