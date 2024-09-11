@@ -23,9 +23,18 @@ type Layer struct {
 	Neurons map[string]Neuron `json:"neurons"`
 }
 
-// NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers.
+// ModelMetadata holds metadata for the model.
+type ModelMetadata struct {
+	ModelID            string  `json:"modelID"`
+	ProjectName        string  `json:"projectName"`
+	LastTrainingAccuracy float64 `json:"lastTrainingAccuracy"`
+	LastTestAccuracy     float64 `json:"lastTestAccuracy"`
+}
+
+// NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers, and model metadata.
 type NetworkConfig struct {
-	Layers struct {
+	Metadata ModelMetadata `json:"metadata"`
+	Layers   struct {
 		Input  Layer   `json:"input"`
 		Hidden []Layer `json:"hidden"`
 		Output Layer   `json:"output"`
@@ -105,14 +114,16 @@ func Feedforward(config *NetworkConfig, inputValues map[string]float64) map[stri
 	return outputs
 }
 
-// RandomWeight generates a random weight for connections.
-func RandomWeight() float64 {
-	return rand.NormFloat64()
-}
-
 // CreateRandomNetworkConfig dynamically generates a network with specified input and output sizes and allows dynamic configuration of output neurons.
-func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes []string) *NetworkConfig {
-	config := &NetworkConfig{}
+func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes []string, modelID, projectName string) *NetworkConfig {
+	config := &NetworkConfig{
+		Metadata: ModelMetadata{
+			ModelID:            modelID,
+			ProjectName:        projectName,
+			LastTrainingAccuracy: 0.0,
+			LastTestAccuracy:     0.0,
+		},
+	}
 
 	// Define input neurons
 	config.Layers.Input.Neurons = make(map[string]Neuron)
@@ -163,8 +174,8 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 
 // DeepCopy creates a deep copy of the NetworkConfig, so each goroutine works on its own copy.
 func DeepCopy(config *NetworkConfig) *NetworkConfig {
-	// Initialize a new config with the correct struct type (including json tags)
 	newConfig := &NetworkConfig{
+		Metadata: config.Metadata, // Copy metadata
 		Layers: struct {
 			Input  Layer   `json:"input"`
 			Hidden []Layer `json:"hidden"`
@@ -173,7 +184,7 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 			Input: Layer{
 				Neurons: make(map[string]Neuron),
 			},
-			Hidden: make([]Layer, len(config.Layers.Hidden)), // Copy the slice, but will fill layers below
+			Hidden: make([]Layer, len(config.Layers.Hidden)),
 			Output: Layer{
 				Neurons: make(map[string]Neuron),
 			},
@@ -184,20 +195,19 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 	for key, neuron := range config.Layers.Input.Neurons {
 		newNeuron := Neuron{
 			ActivationType: neuron.ActivationType,
-			Bias:           neuron.Bias, // Direct copy of bias
+			Bias:           neuron.Bias,
 			Connections:    make(map[string]Connection),
 		}
-		// Copy all connections
 		for connKey, conn := range neuron.Connections {
-			newNeuron.Connections[connKey] = Connection{Weight: conn.Weight} // Deep copy each connection
+			newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
 		}
 		newConfig.Layers.Input.Neurons[key] = newNeuron
 	}
 
-	// Deep copy hidden layers and neurons
+	// Deep copy hidden layers
 	for i, layer := range config.Layers.Hidden {
 		newLayer := Layer{
-			Neurons: make(map[string]Neuron), // Make a new map for neurons
+			Neurons: make(map[string]Neuron),
 		}
 		for key, neuron := range layer.Neurons {
 			newNeuron := Neuron{
@@ -205,7 +215,6 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 				Bias:           neuron.Bias,
 				Connections:    make(map[string]Connection),
 			}
-			// Deep copy connections
 			for connKey, conn := range neuron.Connections {
 				newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
 			}
@@ -221,7 +230,6 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 			Bias:           neuron.Bias,
 			Connections:    make(map[string]Connection),
 		}
-		// Deep copy connections
 		for connKey, conn := range neuron.Connections {
 			newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
 		}
@@ -230,4 +238,3 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 
 	return newConfig
 }
-
