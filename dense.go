@@ -173,30 +173,31 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 			Input: Layer{
 				Neurons: make(map[string]Neuron),
 			},
-			Hidden: make([]Layer, len(config.Layers.Hidden)),
+			Hidden: make([]Layer, len(config.Layers.Hidden)), // Copy the slice, but will fill layers below
 			Output: Layer{
 				Neurons: make(map[string]Neuron),
 			},
 		},
 	}
 
-	// Copy input layer neurons
+	// Deep copy input layer neurons
 	for key, neuron := range config.Layers.Input.Neurons {
 		newNeuron := Neuron{
 			ActivationType: neuron.ActivationType,
-			Bias:           neuron.Bias,
+			Bias:           neuron.Bias, // Direct copy of bias
 			Connections:    make(map[string]Connection),
 		}
+		// Copy all connections
 		for connKey, conn := range neuron.Connections {
-			newNeuron.Connections[connKey] = conn
+			newNeuron.Connections[connKey] = Connection{Weight: conn.Weight} // Deep copy each connection
 		}
 		newConfig.Layers.Input.Neurons[key] = newNeuron
 	}
 
-	// Copy hidden layers and neurons
+	// Deep copy hidden layers and neurons
 	for i, layer := range config.Layers.Hidden {
 		newLayer := Layer{
-			Neurons: make(map[string]Neuron),
+			Neurons: make(map[string]Neuron), // Make a new map for neurons
 		}
 		for key, neuron := range layer.Neurons {
 			newNeuron := Neuron{
@@ -204,26 +205,29 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 				Bias:           neuron.Bias,
 				Connections:    make(map[string]Connection),
 			}
+			// Deep copy connections
 			for connKey, conn := range neuron.Connections {
-				newNeuron.Connections[connKey] = conn
+				newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
 			}
 			newLayer.Neurons[key] = newNeuron
 		}
 		newConfig.Layers.Hidden[i] = newLayer
 	}
 
-	// Copy output layer neurons
+	// Deep copy output layer neurons
 	for key, neuron := range config.Layers.Output.Neurons {
 		newNeuron := Neuron{
 			ActivationType: neuron.ActivationType,
 			Bias:           neuron.Bias,
 			Connections:    make(map[string]Connection),
 		}
+		// Deep copy connections
 		for connKey, conn := range neuron.Connections {
-			newNeuron.Connections[connKey] = conn
+			newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
 		}
 		newConfig.Layers.Output.Neurons[key] = newNeuron
 	}
 
 	return newConfig
 }
+

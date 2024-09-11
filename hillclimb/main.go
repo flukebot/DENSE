@@ -34,10 +34,15 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 }
 
 
-func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, iterations, numWorkers int, learningRate, fitnessBuffer float64) float64 {
-    // Evaluate the current config
-    bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
-    bestConfig := dense.DeepCopy(config)
+func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, learningRate, fitnessBuffer float64) float64 {
+    // Load the current best config from the file
+    bestConfig, err := dense.LoadNetworkFromFile("best_model.json")
+    if err != nil {
+        fmt.Println("Error loading best model, using default config:", err)
+        return 0.0
+    }
+
+    bestFitness := evaluateFitness(bestConfig, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
 
     fmt.Printf("Starting optimization with initial accuracy: %.4f%%\n", bestFitness*100)
 
@@ -48,7 +53,11 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
         wg.Add(1)
         go func() {
             defer wg.Done()
-            currentConfig := dense.DeepCopy(bestConfig) // Start with the best config
+            currentConfig, err := dense.LoadNetworkFromFile("best_model.json") // Always start from the best model on disk
+            if err != nil {
+                fmt.Println("Error loading best model during iteration:", err)
+                return
+            }
             dense.MutateNetwork(currentConfig, learningRate, 30)
             newFitness := evaluateFitness(currentConfig, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
             results <- Result{fitness: newFitness, config: currentConfig}
@@ -61,9 +70,8 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
             for result := range results {
                 if result.fitness > bestFitness+fitnessBuffer { // Only consider significant improvements
                     bestFitness = result.fitness
-                    bestConfig = dense.DeepCopy(result.config) // Save the new best config
                     fmt.Printf("Iteration %d: New best model with accuracy %.4f%%\n", i, bestFitness*100)
-                    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Always overwrite the best model
+                    dense.SaveNetworkToFile(result.config, "best_model.json") // Always overwrite the best model
                 }
             }
 
@@ -75,10 +83,9 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
         }
     }
 
-    // Save the best configuration at the end of the hill climbing
-    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Always ensure it saves to "best_model.json"
     return bestFitness * 100
 }
+
 
 
 
@@ -102,20 +109,16 @@ func main() {
         return
     }
 
-    var config *dense.NetworkConfig
-    if modelExists("best_model.json") {
-        fmt.Println("Loading existing best model from file...")
-        config, err = dense.LoadNetworkFromFile("best_model.json") // Ensure we're loading the best model
-        if err != nil {
-            fmt.Println("Error loading best model:", err)
-            return
-        }
-    } else {
+    // Check if the best model already exists
+    if !modelExists("best_model.json") {
         fmt.Println("No existing model found, creating a new one...")
         numInputs := 28 * 28
         numOutputs := 1
         outputActivationTypes := []string{"sigmoid"}
-        config = dense.CreateRandomNetworkConfig(numInputs, numOutputs, outputActivationTypes)
+        initialConfig := dense.CreateRandomNetworkConfig(numInputs, numOutputs, outputActivationTypes)
+        dense.SaveNetworkToFile(initialConfig, "best_model.json") // Save the initial model
+    } else {
+        fmt.Println("Loading existing best model from file...")
     }
 
     fmt.Println("Starting multithreaded hill climbing optimization...")
@@ -126,7 +129,7 @@ func main() {
     numWorkers := 10 // Adjust this based on your system's capabilities
 
     for {
-        bestFitness := hillClimbingOptimize(config, mnist, 100, numWorkers, 0.1, 0.0001)
+        bestFitness := hillClimbingOptimize(mnist, 100, numWorkers, 0.1, 0.0001)
         fmt.Printf("Current best model accuracy: %.4f%%\n", bestFitness)
 
         if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
@@ -144,3 +147,4 @@ func main() {
     }
     fmt.Println("Loaded best model configuration:", loadedConfig)
 }
+
