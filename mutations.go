@@ -33,46 +33,46 @@ func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int
     // Randomly select the mutation type to apply
     switch rand.Intn(14) { // Updated to include all 14 mutation types
     case int(MutateWeight):
-        fmt.Println("Applying weight mutation")
+       //  fmt.Println("Applying weight mutation")
         MutateWeights(config, learningRate, mutationRate)
     case int(AddNeuronMutation):
-        fmt.Println("Adding a neuron")
+       //  fmt.Println("Adding a neuron")
         AddNeuron(config, mutationRate)
     case int(AddLayerFullConnectionMutation):
-        fmt.Println("Adding a new fully connected layer")
+       //  fmt.Println("Adding a new fully connected layer")
         AddLayerFullConnections(config, mutationRate)
     case int(AddLayerSparseMutation):
-        fmt.Println("Adding a new sparse layer")
+       //  fmt.Println("Adding a new sparse layer")
         AddLayer(config, mutationRate)
     case int(AddLayerRandomPositionMutation):
-        fmt.Println("Adding a new layer at a random position")
+       //  fmt.Println("Adding a new layer at a random position")
         AddLayerRandomPosition(config, mutationRate)
     case int(MutateActivationFunction):
-        fmt.Println("Mutating activation functions")
+       //  fmt.Println("Mutating activation functions")
         MutateActivationFunctions(config, mutationRate)
     case int(RemoveNeuronMutation):
-        fmt.Println("Removing a neuron")
+       //  fmt.Println("Removing a neuron")
         RemoveNeuron(config, mutationRate)
     case int(RemoveLayerMutation):
-        fmt.Println("Removing a layer")
+       //  fmt.Println("Removing a layer")
         RemoveLayer(config, mutationRate)
     case int(DuplicateNeuronMutation):
-        fmt.Println("Duplicating a neuron")
+       //  fmt.Println("Duplicating a neuron")
         DuplicateNeuron(config, mutationRate)
     case int(MutateBiasMutation):
-        fmt.Println("Mutating biases")
+       //  fmt.Println("Mutating biases")
         MutateBiases(config, mutationRate, learningRate)
     case int(RandomizeWeightsMutation):
-        fmt.Println("Randomizing weights")
+       //  fmt.Println("Randomizing weights")
         RandomizeWeights(config, mutationRate)
     case int(SplitNeuronMutation):
-        fmt.Println("Splitting a neuron")
+       //  fmt.Println("Splitting a neuron")
         SplitNeuron(config, mutationRate)
     case int(SwapLayerActivationsMutation):
-        fmt.Println("Swapping layer activations")
+       //  fmt.Println("Swapping layer activations")
         SwapLayerActivations(config, mutationRate)
     case int(ShuffleLayerConnectionsMutation):
-        fmt.Println("Shuffling layer connections")
+       //  fmt.Println("Shuffling layer connections")
         ShuffleLayerConnections(config, mutationRate)
     }
 }
@@ -160,7 +160,7 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
 
     // Check if there are any hidden layers to add a neuron to
     if len(config.Layers.Hidden) == 0 {
-        fmt.Println("No hidden layers found. Adding a new layer first.")
+       //  fmt.Println("No hidden layers found. Adding a new layer first.")
         AddLayer(config, mutationRate) // Add a new layer if there are none
         return
     }
@@ -206,7 +206,7 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
         // Add the new neuron to the selected layer
         layer.Neurons[neuronID] = newNeuron
 
-        fmt.Printf("Added a new neuron to hidden layer %d\n", layerIdx+1)
+       //  fmt.Printf("Added a new neuron to hidden layer %d\n", layerIdx+1)
     }
 }
 
@@ -241,23 +241,24 @@ func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
-            fmt.Printf("Added neuron %s to new layer with connections to previous layer\n", neuronID)
+           //  fmt.Printf("Added neuron %s to new layer with connections to previous layer\n", neuronID)
         }
 
         // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
         if len(config.Layers.Hidden) == 0 {
-            fmt.Println("Connecting new layer to the output layer directly")
+           //  fmt.Println("Connecting new layer to the output layer directly")
         }
-        for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
+        //for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
+        for _, outputNeuron := range config.Layers.Output.Neurons {
             for newNeuronID := range newLayer.Neurons {
                 outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
-                fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
+               //  fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
             }
         }
 
         // Append the new layer to the hidden layers
         config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
-        fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
+       //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
     }
 }
 
@@ -299,23 +300,24 @@ func AddLayer(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
-            fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
+           //  fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
         }
 
         // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
         if len(config.Layers.Hidden) == 0 {
-            fmt.Println("Connecting new layer to the output layer directly")
+           //  fmt.Println("Connecting new layer to the output layer directly")
         }
-        for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
+        //for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
+        for _, outputNeuron := range config.Layers.Output.Neurons {
             for newNeuronID := range newLayer.Neurons {
                 outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
-                fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
+               //  fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
             }
         }
 
         // Append the new layer to the hidden layers
         config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
-        fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
+       //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
     }
 }
 
@@ -357,7 +359,7 @@ func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
-            fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
+           //  fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
         }
 
         // Randomly choose a position to insert the new layer
@@ -365,7 +367,7 @@ func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
 
         // Insert the new layer at the randomly chosen position
         config.Layers.Hidden = append(config.Layers.Hidden[:insertPosition], append([]Layer{newLayer}, config.Layers.Hidden[insertPosition:]...)...)
-        fmt.Printf("Inserted a new hidden layer with %d neurons at position %d\n", numNewNeurons, insertPosition+1)
+       //  fmt.Printf("Inserted a new hidden layer with %d neurons at position %d\n", numNewNeurons, insertPosition+1)
     }
 }
 
@@ -383,7 +385,7 @@ func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
                 newActivation := randomActivationType()
                 neuron.ActivationType = newActivation
                 layer.Neurons[neuronID] = neuron // Apply the mutation
-                fmt.Printf("Mutated activation function of neuron %s to %s\n", neuronID, newActivation)
+               //  fmt.Printf("Mutated activation function of neuron %s to %s\n", neuronID, newActivation)
             }
         }
     }
@@ -394,7 +396,7 @@ func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
             newActivation := randomActivationType()
             neuron.ActivationType = newActivation
             config.Layers.Output.Neurons[neuronID] = neuron // Apply the mutation
-            fmt.Printf("Mutated activation function of output neuron %s to %s\n", neuronID, newActivation)
+           //  fmt.Printf("Mutated activation function of output neuron %s to %s\n", neuronID, newActivation)
         }
     }
 }
@@ -419,7 +421,7 @@ func RemoveNeuron(config *NetworkConfig, mutationRate int) {
             // Randomly select a neuron to remove
             for neuronID := range config.Layers.Hidden[layerIdx].Neurons {
                 delete(config.Layers.Hidden[layerIdx].Neurons, neuronID)
-                fmt.Printf("Removed neuron %s from hidden layer %d\n", neuronID, layerIdx+1)
+               //  fmt.Printf("Removed neuron %s from hidden layer %d\n", neuronID, layerIdx+1)
                 break
             }
             break
@@ -434,7 +436,7 @@ func RemoveLayer(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate {
         layerIdx := rand.Intn(len(config.Layers.Hidden))
         config.Layers.Hidden = append(config.Layers.Hidden[:layerIdx], config.Layers.Hidden[layerIdx+1:]...)
-        fmt.Printf("Removed hidden layer at position %d\n", layerIdx+1)
+       //  fmt.Printf("Removed hidden layer at position %d\n", layerIdx+1)
     }
 }
 
@@ -449,7 +451,7 @@ func DuplicateNeuron(config *NetworkConfig, mutationRate int) {
             for neuronID, neuron := range config.Layers.Hidden[layerIdx].Neurons {
                 newNeuronID := fmt.Sprintf("%s_dup", neuronID)
                 config.Layers.Hidden[layerIdx].Neurons[newNeuronID] = neuron
-                fmt.Printf("Duplicated neuron %s as %s in hidden layer %d\n", neuronID, newNeuronID, layerIdx+1)
+               //  fmt.Printf("Duplicated neuron %s as %s in hidden layer %d\n", neuronID, newNeuronID, layerIdx+1)
                 break
             }
             break
@@ -468,7 +470,7 @@ func MutateBiases(config *NetworkConfig, mutationRate int, learningRate float64)
             if rand.Intn(100) < mutationRate {
                 neuron.Bias += rand.NormFloat64() * learningRate
                 layer.Neurons[neuronID] = neuron
-                fmt.Printf("Mutated bias of neuron %s to %.4f\n", neuronID, neuron.Bias)
+               //  fmt.Printf("Mutated bias of neuron %s to %.4f\n", neuronID, neuron.Bias)
             }
         }
     }
@@ -477,7 +479,7 @@ func MutateBiases(config *NetworkConfig, mutationRate int, learningRate float64)
         if rand.Intn(100) < mutationRate {
             neuron.Bias += rand.NormFloat64() * learningRate
             config.Layers.Output.Neurons[neuronID] = neuron
-            fmt.Printf("Mutated bias of output neuron %s to %.4f\n", neuronID, neuron.Bias)
+           //  fmt.Printf("Mutated bias of output neuron %s to %.4f\n", neuronID, neuron.Bias)
         }
     }
 }
@@ -492,7 +494,7 @@ func RandomizeWeights(config *NetworkConfig, mutationRate int) {
             for connID := range neuron.Connections {
                 if rand.Intn(100) < mutationRate {
                     neuron.Connections[connID] = Connection{Weight: rand.NormFloat64()}
-                    fmt.Printf("Randomized weight of connection %s for neuron %s\n", connID, neuronID)
+                   //  fmt.Printf("Randomized weight of connection %s for neuron %s\n", connID, neuronID)
                 }
             }
             layer.Neurons[neuronID] = neuron
@@ -503,7 +505,7 @@ func RandomizeWeights(config *NetworkConfig, mutationRate int) {
         for connID := range neuron.Connections {
             if rand.Intn(100) < mutationRate {
                 neuron.Connections[connID] = Connection{Weight: rand.NormFloat64()}
-                fmt.Printf("Randomized weight of connection %s for output neuron %s\n", connID, neuronID)
+               //  fmt.Printf("Randomized weight of connection %s for output neuron %s\n", connID, neuronID)
             }
         }
         config.Layers.Output.Neurons[neuronID] = neuron
@@ -535,7 +537,7 @@ func SplitNeuron(config *NetworkConfig, mutationRate int) {
                 config.Layers.Hidden[layerIdx].Neurons[neuronID+"_split1"] = newNeuron1
                 config.Layers.Hidden[layerIdx].Neurons[neuronID+"_split2"] = newNeuron2
 
-                fmt.Printf("Split neuron %s into %s_split1 and %s_split2\n", neuronID, neuronID, neuronID)
+               //  fmt.Printf("Split neuron %s into %s_split1 and %s_split2\n", neuronID, neuronID, neuronID)
                 delete(config.Layers.Hidden[layerIdx].Neurons, neuronID)
                 break
             }
@@ -561,14 +563,15 @@ func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
                 neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
                 layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
             }
-            fmt.Printf("Swapped activation functions between layer %d and layer %d\n", idx1+1, idx2+1)
+           //  fmt.Printf("Swapped activation functions between layer %d and layer %d\n", idx1+1, idx2+1)
         }
     }
 }
 
 
 func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
-    for layerIdx, layer := range config.Layers.Hidden {
+    //for layerIdx, layer := range config.Layers.Hidden {
+    for _, layer := range config.Layers.Hidden {
         if rand.Intn(100) < mutationRate {
             neuronIDs := make([]string, 0, len(layer.Neurons))
             for neuronID := range layer.Neurons {
@@ -584,7 +587,7 @@ func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
                 layer.Neurons[neuronID] = neuron // Put the modified neuron back into the map
             }
             
-            fmt.Printf("Shuffled connections in layer %d\n", layerIdx+1)
+           //  fmt.Printf("Shuffled connections in layer %d\n", layerIdx+1)
         }
     }
 }
