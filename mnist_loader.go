@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"encoding/json"
 	"path/filepath"
 )
 
@@ -104,7 +105,7 @@ type MNISTData struct {
 }
 
 // LoadMNIST loads the MNIST dataset from the unzipped files
-func LoadMNIST() (*MNISTData, error) {
+func LoadMNISTOLD() (*MNISTData, error) {
 	trainImages, err := loadImages("train-images-idx3-ubyte")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load training images: %w", err)
@@ -121,6 +122,34 @@ func LoadMNIST() (*MNISTData, error) {
 	}
 
 	return mnist, nil
+}
+
+func SaveMNIST(filename string, mnist *MNISTData) error {
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    encoder := json.NewEncoder(file)
+    return encoder.Encode(mnist)
+}
+
+func LoadMNIST(filename string) (*MNISTData, error) {
+    file, err := os.Open(filename)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    mnist := new(MNISTData)
+    decoder := json.NewDecoder(file)
+    err = decoder.Decode(mnist)
+    if err != nil {
+        return nil, err
+    }
+
+    return mnist, nil
 }
 
 func loadImages(filename string) ([][]byte, error) {

@@ -53,17 +53,13 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData) float6
 	return accuracy
 }
 
-// Optimization process that runs hill climbing with batching and multithreading
-func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWorkers int, learningRate, fitnessBuffer float64) float64 {
+func hillClimbingOptimize(trainData *dense.MNISTData, iterations, batchSize, numWorkers int, learningRate, fitnessBuffer float64) float64 {
     // Load the best config from the file only once
     bestConfig, err := dense.LoadNetworkFromFile("best_model.json")
     if err != nil {
         fmt.Println("Error loading best model, using default config:", err)
         return 0.0
     }
-
-    // Split data into training and testing sets
-    trainData, testData := splitData(mnist)
 
     // Evaluate initial accuracy on the training set
     bestFitness := evaluateFitness(bestConfig, trainData)
@@ -127,70 +123,116 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWork
     // Save the best model after all batches are complete
     dense.SaveNetworkToFile(bestConfig, "best_model.json")
 
-    // After hill climbing, evaluate on the test data
-    testAccuracy := evaluateFitness(bestConfig, testData) // Evaluate on test data
-    fmt.Printf("Final model accuracy on test set: %.4f%%\n", testAccuracy*100)
-
     return bestFitness * 100
 }
+
 
 func modelExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return !os.IsNotExist(err)
 }
 
-func main() {
-	rand.Seed(time.Now().UnixNano())
-
-	err := dense.EnsureMNISTDownloads()
-	if err != nil {
-		fmt.Println("Error downloading MNIST dataset:", err)
-		return
-	}
-
-	mnist, err := dense.LoadMNIST()
-	if err != nil {
-		fmt.Println("Error loading MNIST dataset:", err)
-		return
-	}
-
-	// Check if the best model already exists
-	if !modelExists("best_model.json") {
-		fmt.Println("No existing model found, creating a new one...")
-		numInputs := 28 * 28
-		numOutputs := 1
-		outputActivationTypes := []string{"sigmoid"}
-		initialConfig := dense.CreateRandomNetworkConfig(numInputs, numOutputs, outputActivationTypes)
-		dense.SaveNetworkToFile(initialConfig, "best_model.json") // Save the initial model
-	} else {
-		fmt.Println("Loading existing best model from file...")
-	}
-
-	fmt.Println("Starting multithreaded hill climbing optimization...")
-
-	desiredAccuracy := 80.0
-	maxDuration := 12 * time.Hour
-	startTime := time.Now()
-
-	numWorkers := 10 // Adjust this based on your system's capabilities
-	batchSize := 10  // Set the batch size
-
-	for {
-		bestFitness := hillClimbingOptimize(mnist, 100, batchSize, numWorkers, 0.5, 0.005)
-		fmt.Printf("Current best model accuracy (training set): %.4f%%\n", bestFitness)
-
-		if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
-			break
-		}
-
-		time.Sleep(1 * time.Second)
-	}
-
-	// Load and print the best saved model
-	loadedConfig, err := dense.LoadNetworkFromFile("best_model.json") // Load the final best model
-	if err != nil {
-		fmt.Println("Error loading final best model:", err)
-		return
-	}
-	fmt.Println("Loaded best model configuration:", loadedConfig)
+// Save the training and test data to files
+func saveData(trainData, testData *dense.MNISTData, trainFile, testFile string) error {
+    err := dense.SaveMNIST(trainFile, trainData)
+    if err != nil {
+        return err
+    }
+    err = dense.SaveMNIST(testFile, testData)
+    return err
 }
+
+// Load the training and test data from files
+func loadData(trainFile, testFile string) (trainData, testData *dense.MNISTData, err error) {
+    trainData, err = dense.LoadMNIST(trainFile)
+    if err != nil {
+        return nil, nil, err
+    }
+    testData, err = dense.LoadMNIST(testFile)
+    if err != nil {
+        return nil, nil, err
+    }
+    return trainData, testData, nil
+}
+
+
+func main() {
+    rand.Seed(time.Now().UnixNano())
+
+    err := dense.EnsureMNISTDownloads()
+    if err != nil {
+        fmt.Println("Error downloading MNIST dataset:", err)
+        return
+    }
+
+    var trainData, testData *dense.MNISTData
+    trainFile := "train_data.json"
+    testFile := "test_data.json"
+
+    // Check if the training and test data already exist
+    if modelExists(trainFile) && modelExists(testFile) {
+        // Load the saved training and test data
+        fmt.Println("Loading saved training and test data...")
+        trainData, testData, err = loadData(trainFile, testFile)
+        if err != nil {
+            fmt.Println("Error loading saved data:", err)
+            return
+        }
+    } else {
+        // Load the full MNIST data from raw files and split it into training and test sets
+        mnist, err := dense.LoadMNISTOLD() // Use the old function to load from raw files
+        if err != nil {
+            fmt.Println("Error loading MNIST dataset:", err)
+            return
+        }
+        trainData, testData = splitData(mnist)
+
+        // Save the split data for future use
+        err = saveData(trainData, testData, trainFile, testFile)
+        if err != nil {
+            fmt.Println("Error saving split data:", err)
+            return
+        }
+    }
+
+    // Check if the best model already exists
+    if !modelExists("best_model.json") {
+        fmt.Println("No existing model found, creating a new one...")
+        numInputs := 28 * 28
+        numOutputs := 1
+        outputActivationTypes := []string{"sigmoid"}
+        initialConfig := dense.CreateRandomNetworkConfig(numInputs, numOutputs, outputActivationTypes)
+        dense.SaveNetworkToFile(initialConfig, "best_model.json") // Save the initial model
+    } else {
+        fmt.Println("Loading existing best model from file...")
+    }
+
+    fmt.Println("Starting multithreaded hill climbing optimization...")
+
+    desiredAccuracy := 80.0
+    maxDuration := 12 * time.Hour
+    startTime := time.Now()
+
+    numWorkers := 10 // Adjust this based on your system's capabilities
+    batchSize := 10  // Set the batch size
+
+    for {
+        bestFitness := hillClimbingOptimize(trainData, 100, batchSize, numWorkers, 0.5, 0.005)
+        fmt.Printf("Current best model accuracy (training set): %.4f%%\n", bestFitness)
+
+        if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
+            break
+        }
+
+        time.Sleep(1 * time.Second)
+    }
+
+    // Load and print the best saved model
+    loadedConfig, err := dense.LoadNetworkFromFile("best_model.json") // Load the final best model
+    if err != nil {
+        fmt.Println("Error loading final best model:", err)
+        return
+    }
+    fmt.Println("Loaded best model configuration:", loadedConfig)
+}
+
