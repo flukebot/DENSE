@@ -84,7 +84,7 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWork
                 currentConfig := dense.DeepCopy(bestConfig) // Use deep copy instead of loading from file
 
                 // Mutate the model and evaluate its fitness
-                dense.MutateNetwork(currentConfig, learningRate, 30)
+                dense.MutateNetwork(currentConfig, learningRate, 50)
                 newFitness := evaluateFitness(currentConfig, trainData) // Evaluate on training data
 
                 // Save mutated model to the temporary file
@@ -176,7 +176,7 @@ func main() {
 	batchSize := 10  // Set the batch size
 
 	for {
-		bestFitness := hillClimbingOptimize(mnist, 100, batchSize, numWorkers, 0.1, 0.0001)
+		bestFitness := hillClimbingOptimize(mnist, 100, batchSize, numWorkers, 0.5, 0.005)
 		fmt.Printf("Current best model accuracy (training set): %.4f%%\n", bestFitness)
 
 		if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
