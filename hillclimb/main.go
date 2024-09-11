@@ -80,18 +80,14 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWork
                 defer wg.Done()
                 tmpModelFilename := fmt.Sprintf("tmp_model_%d.json", workerID)
 
-                // Load the temporary model file for this worker
-                currentConfig, err := dense.LoadNetworkFromFile("best_model.json")
-                if err != nil {
-                    fmt.Println("Error loading best model during iteration:", err)
-                    return
-                }
+                // Load a temporary copy of the best model for this worker
+                currentConfig := dense.DeepCopy(bestConfig) // Use deep copy instead of loading from file
 
                 // Mutate the model and evaluate its fitness
                 dense.MutateNetwork(currentConfig, learningRate, 30)
                 newFitness := evaluateFitness(currentConfig, trainData) // Evaluate on training data
 
-                // Save mutated model to the temporary file again
+                // Save mutated model to the temporary file
                 dense.SaveNetworkToFile(currentConfig, tmpModelFilename)
 
                 results <- Result{fitness: newFitness, tmpModel: tmpModelFilename}
@@ -108,13 +104,13 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWork
         for result := range results {
             if result.fitness > bestFitness+fitnessBuffer {
                 bestFitness = result.fitness
-                // Load the best temp model and save it as the new best model
+                // Load the best temp model and store it in memory (don't save it to file just yet)
                 tmpConfig, err := dense.LoadNetworkFromFile(result.tmpModel)
                 if err != nil {
                     fmt.Println("Error loading temp model:", err)
                     continue
                 }
-                dense.SaveNetworkToFile(tmpConfig, "best_model.json") // Overwrite the best model
+                bestConfig = tmpConfig // Update the best config in memory
                 fmt.Printf("New best model found with accuracy: %.4f%%\n", bestFitness*100)
             }
 
@@ -128,12 +124,12 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, batchSize, numWork
         fmt.Printf("\nBatch ending at iteration %d: Current best accuracy: %.4f%%\n", i+batchSize, bestFitness*100)
     }
 
+    // Save the best model after all batches are complete
+    dense.SaveNetworkToFile(bestConfig, "best_model.json")
+
     // After hill climbing, evaluate on the test data
-    finalConfig, err := dense.LoadNetworkFromFile("best_model.json")
-    if err == nil {
-        testAccuracy := evaluateFitness(finalConfig, testData) // Evaluate on test data
-        fmt.Printf("Final model accuracy on test set: %.4f%%\n", testAccuracy*100)
-    }
+    testAccuracy := evaluateFitness(bestConfig, testData) // Evaluate on test data
+    fmt.Printf("Final model accuracy on test set: %.4f%%\n", testAccuracy*100)
 
     return bestFitness * 100
 }
