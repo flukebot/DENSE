@@ -45,7 +45,7 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, le
     fmt.Printf("Starting optimization with initial accuracy: %.4f%%\n", bestFitness*100)
 
     var wg sync.WaitGroup
-    results := make(chan Result, numWorkers)
+    results := make(chan Result, iterations)
 
     // Push best model into temporary files for each goroutine
     for i := 0; i < numWorkers; i++ {
@@ -78,9 +78,11 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, le
         }(i % numWorkers) // Reuse workers by assigning % numWorkers
     }
 
-    // Wait for all goroutines to finish
-    wg.Wait()
-    close(results)
+    // Use a separate goroutine to close the results channel once all goroutines have finished
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
 
     // After all threads finish, evaluate the results
     for result := range results {
@@ -105,6 +107,7 @@ func hillClimbingOptimize(mnist *dense.MNISTData, iterations, numWorkers int, le
 
     return bestFitness * 100
 }
+
 
 
 func modelExists(filename string) bool {
