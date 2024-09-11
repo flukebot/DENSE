@@ -143,7 +143,7 @@ func main() {
 
 	for {
 		bestFitness = hillClimbingOptimize(config, mnist, 10, 0.1)
-		fmt.Printf("Current best model accuracy: %.4f%%\n", bestFitness*100)
+		fmt.Printf("Current best model accuracy: %.4f%%\n", bestFitness)
 
 		// Check if the desired accuracy is reached or if the time limit is exceeded
 		if bestFitness >= desiredAccuracy || time.Since(startTime) >= maxDuration {
