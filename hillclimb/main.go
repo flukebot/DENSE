@@ -35,6 +35,7 @@ func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData, rng *r
 
 
 func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, iterations, numWorkers int, learningRate, fitnessBuffer float64) float64 {
+    // Evaluate the current config
     bestFitness := evaluateFitness(config, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
     bestConfig := dense.DeepCopy(config)
 
@@ -47,7 +48,7 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
         wg.Add(1)
         go func() {
             defer wg.Done()
-            currentConfig := dense.DeepCopy(bestConfig)
+            currentConfig := dense.DeepCopy(bestConfig) // Start with the best config
             dense.MutateNetwork(currentConfig, learningRate, 30)
             newFitness := evaluateFitness(currentConfig, mnist, rand.New(rand.NewSource(time.Now().UnixNano())))
             results <- Result{fitness: newFitness, config: currentConfig}
@@ -58,11 +59,11 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
             close(results)
 
             for result := range results {
-                if result.fitness > bestFitness+fitnessBuffer {
+                if result.fitness > bestFitness+fitnessBuffer { // Only consider significant improvements
                     bestFitness = result.fitness
-                    bestConfig = dense.DeepCopy(result.config)
+                    bestConfig = dense.DeepCopy(result.config) // Save the new best config
                     fmt.Printf("Iteration %d: New best model with accuracy %.4f%%\n", i, bestFitness*100)
-                    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Save only to "best_model.json"
+                    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Always overwrite the best model
                 }
             }
 
@@ -70,14 +71,15 @@ func hillClimbingOptimize(config *dense.NetworkConfig, mnist *dense.MNISTData, i
                 fmt.Printf("\nCurrent best accuracy: %.4f%%\n", bestFitness*100)
             }
 
-            results = make(chan Result, iterations)
+            results = make(chan Result, iterations) // Reinitialize the results channel for the next batch
         }
     }
 
     // Save the best configuration at the end of the hill climbing
-    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Ensure it saves to the same file
+    dense.SaveNetworkToFile(bestConfig, "best_model.json") // Always ensure it saves to "best_model.json"
     return bestFitness * 100
 }
+
 
 
 func modelExists(filename string) bool {
@@ -101,11 +103,11 @@ func main() {
     }
 
     var config *dense.NetworkConfig
-    if modelExists("best_model.json") { // Use "best_model.json" instead of "final_best_model.json"
-        fmt.Println("Loading existing model from file...")
-        config, err = dense.LoadNetworkFromFile("best_model.json") // Load from "best_model.json"
+    if modelExists("best_model.json") {
+        fmt.Println("Loading existing best model from file...")
+        config, err = dense.LoadNetworkFromFile("best_model.json") // Ensure we're loading the best model
         if err != nil {
-            fmt.Println("Error loading model:", err)
+            fmt.Println("Error loading best model:", err)
             return
         }
     } else {
@@ -134,9 +136,10 @@ func main() {
         time.Sleep(1 * time.Second)
     }
 
-    loadedConfig, err := dense.LoadNetworkFromFile("best_model.json") // Load final model from "best_model.json"
+    // Load and print the best saved model
+    loadedConfig, err := dense.LoadNetworkFromFile("best_model.json") // Load the final best model
     if err != nil {
-        fmt.Println("Error loading final model:", err)
+        fmt.Println("Error loading final best model:", err)
         return
     }
     fmt.Println("Loaded best model configuration:", loadedConfig)
