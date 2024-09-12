@@ -24,58 +24,326 @@ const (
     SplitNeuronMutation
     SwapLayerActivationsMutation
     ShuffleLayerConnectionsMutation
+    ShuffleLayersMutation // New mutation type to shuffle layers
 )
 
-// MutateNetwork applies a random mutation based on the mutation type
+// Example usage in MutateNetwork
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
 
     // Randomly select the mutation type to apply
-    switch rand.Intn(14) { // Updated to include all 14 mutation types
+    switch rand.Intn(23) { // Updated to include the new mutation types
     case int(MutateWeight):
-       //  fmt.Println("Applying weight mutation")
         MutateWeights(config, learningRate, mutationRate)
     case int(AddNeuronMutation):
-       //  fmt.Println("Adding a neuron")
         AddNeuron(config, mutationRate)
     case int(AddLayerFullConnectionMutation):
-       //  fmt.Println("Adding a new fully connected layer")
         AddLayerFullConnections(config, mutationRate)
     case int(AddLayerSparseMutation):
-       //  fmt.Println("Adding a new sparse layer")
         AddLayer(config, mutationRate)
     case int(AddLayerRandomPositionMutation):
-       //  fmt.Println("Adding a new layer at a random position")
         AddLayerRandomPosition(config, mutationRate)
     case int(MutateActivationFunction):
-       //  fmt.Println("Mutating activation functions")
         MutateActivationFunctions(config, mutationRate)
     case int(RemoveNeuronMutation):
-       //  fmt.Println("Removing a neuron")
         RemoveNeuron(config, mutationRate)
     case int(RemoveLayerMutation):
-       //  fmt.Println("Removing a layer")
         RemoveLayer(config, mutationRate)
     case int(DuplicateNeuronMutation):
-       //  fmt.Println("Duplicating a neuron")
         DuplicateNeuron(config, mutationRate)
     case int(MutateBiasMutation):
-       //  fmt.Println("Mutating biases")
         MutateBiases(config, mutationRate, learningRate)
     case int(RandomizeWeightsMutation):
-       //  fmt.Println("Randomizing weights")
         RandomizeWeights(config, mutationRate)
     case int(SplitNeuronMutation):
-       //  fmt.Println("Splitting a neuron")
         SplitNeuron(config, mutationRate)
     case int(SwapLayerActivationsMutation):
-       //  fmt.Println("Swapping layer activations")
         SwapLayerActivations(config, mutationRate)
     case int(ShuffleLayerConnectionsMutation):
-       //  fmt.Println("Shuffling layer connections")
         ShuffleLayerConnections(config, mutationRate)
+    case int(ShuffleLayersMutation):
+        ShuffleLayers(config, mutationRate)
+    case 15: // Add multiple random layers
+        AddMultipleLayers(config, mutationRate)
+    case 16: // Double the number of layers
+        DoubleLayers(config, mutationRate)
+    case 17: // Mirror layers from top to bottom
+        MirrorLayersTopToBottom(config, mutationRate)
+    case 18: // Mirror edges from side to side
+        MirrorEdgesSideToSide(config, mutationRate)
+    case 19: // Invert weights
+        InvertWeights(config, mutationRate)
+    case 20: // Invert biases
+        InvertBiases(config, mutationRate)
+    case 21: // Invert activation functions
+        InvertActivationFunctions(config, mutationRate)
+    case 22: // Invert connections
+        InvertConnections(config, mutationRate)
     }
 }
+
+
+// InvertWeights inverts a percentage of the network's weights based on the mutation rate
+func InvertWeights(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    for _, layer := range config.Layers.Hidden {
+        for neuronID, neuron := range layer.Neurons {
+            for connID, conn := range neuron.Connections {
+                if rand.Intn(100) < mutationRate {
+                    conn.Weight = -conn.Weight // Invert the weight
+                    neuron.Connections[connID] = conn
+                }
+            }
+            layer.Neurons[neuronID] = neuron
+        }
+    }
+
+    for neuronID, neuron := range config.Layers.Output.Neurons {
+        for connID, conn := range neuron.Connections {
+            if rand.Intn(100) < mutationRate {
+                conn.Weight = -conn.Weight // Invert the weight
+                neuron.Connections[connID] = conn
+            }
+        }
+        config.Layers.Output.Neurons[neuronID] = neuron
+    }
+
+    //fmt.Printf("Inverted weights with mutation rate of %d%%.\n", mutationRate)
+}
+
+// InvertBiases inverts a percentage of the neuron biases based on the mutation rate
+func InvertBiases(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    for _, layer := range config.Layers.Hidden {
+        for neuronID, neuron := range layer.Neurons {
+            if rand.Intn(100) < mutationRate {
+                neuron.Bias = -neuron.Bias // Invert the bias
+                layer.Neurons[neuronID] = neuron
+            }
+        }
+    }
+
+    for neuronID, neuron := range config.Layers.Output.Neurons {
+        if rand.Intn(100) < mutationRate {
+            neuron.Bias = -neuron.Bias // Invert the bias
+            config.Layers.Output.Neurons[neuronID] = neuron
+        }
+    }
+
+    //fmt.Printf("Inverted biases with mutation rate of %d%%.\n", mutationRate)
+}
+
+// InvertActivationFunctions inverts the activation functions based on mutation rate
+func InvertActivationFunctions(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    activationInversionMap := map[string]string{
+        "relu":       "leaky_relu", // Replace with an "opposite" or alternate activation
+        "sigmoid":    "tanh",
+        "tanh":       "sigmoid",
+        "leaky_relu": "relu",
+    }
+
+    // Randomly mutate activation functions for neurons in hidden layers
+    for _, layer := range config.Layers.Hidden {
+        for neuronID, neuron := range layer.Neurons {
+            if rand.Intn(100) < mutationRate {
+                invertedActivation := activationInversionMap[neuron.ActivationType]
+                neuron.ActivationType = invertedActivation
+                layer.Neurons[neuronID] = neuron
+            }
+        }
+    }
+
+    // Randomly mutate activation functions for neurons in output layer
+    for neuronID, neuron := range config.Layers.Output.Neurons {
+        if rand.Intn(100) < mutationRate {
+            invertedActivation := activationInversionMap[neuron.ActivationType]
+            neuron.ActivationType = invertedActivation
+            config.Layers.Output.Neurons[neuronID] = neuron
+        }
+    }
+
+    //fmt.Printf("Inverted activation functions with mutation rate of %d%%.\n", mutationRate)
+}
+
+// InvertConnections inverts a percentage of connections between neurons based on mutation rate
+func InvertConnections(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    for _, layer := range config.Layers.Hidden {
+        for neuronID, neuron := range layer.Neurons {
+            invertedConnections := make(map[string]Connection)
+            for connID, conn := range neuron.Connections {
+                if rand.Intn(100) < mutationRate {
+                    invertedConnections[connID] = Connection{Weight: -conn.Weight} // Invert the connection weight
+                } else {
+                    invertedConnections[connID] = conn
+                }
+            }
+            neuron.Connections = invertedConnections
+            layer.Neurons[neuronID] = neuron
+        }
+    }
+
+    for neuronID, neuron := range config.Layers.Output.Neurons {
+        invertedConnections := make(map[string]Connection)
+        for connID, conn := range neuron.Connections {
+            if rand.Intn(100) < mutationRate {
+                invertedConnections[connID] = Connection{Weight: -conn.Weight} // Invert the connection weight
+            } else {
+                invertedConnections[connID] = conn
+            }
+        }
+        neuron.Connections = invertedConnections
+        config.Layers.Output.Neurons[neuronID] = neuron
+    }
+
+    //fmt.Printf("Inverted neuron connections with mutation rate of %d%%.\n", mutationRate)
+}
+
+
+// AddMultipleLayers adds a random number of layers to the network
+func AddMultipleLayers(config *NetworkConfig, mutationRate int) {
+    rand.Seed(time.Now().UnixNano())
+
+    if rand.Intn(100) < mutationRate {
+        numNewLayers := rand.Intn(5) + 1 // Add 1 to 5 layers randomly
+        for i := 0; i < numNewLayers; i++ {
+            newLayer := Layer{
+                Neurons: make(map[string]Neuron),
+            }
+
+            // Add 1 to 3 neurons to each new layer
+            numNewNeurons := rand.Intn(3) + 1
+            for j := 0; j < numNewNeurons; j++ {
+                neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
+                newNeuron := Neuron{
+                    ActivationType: randomActivationType(),
+                    Connections:    make(map[string]Connection),
+                    Bias:           rand.NormFloat64(),
+                }
+
+                // Connect the new neuron to the previous layer's neurons
+                var previousLayerNeurons map[string]Neuron
+                if len(config.Layers.Hidden) == 0 {
+                    previousLayerNeurons = config.Layers.Input.Neurons
+                } else {
+                    previousLayerNeurons = config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons
+                }
+                for prevNeuronID := range previousLayerNeurons {
+                    newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
+                }
+
+                // Add the new neuron to the layer
+                newLayer.Neurons[neuronID] = newNeuron
+            }
+
+            // Append the new layer to the hidden layers
+            config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+        }
+
+        //fmt.Printf("Added %d new layers to the network.\n", numNewLayers)
+    }
+}
+
+// DoubleLayers duplicates the current layers in the network
+func DoubleLayers(config *NetworkConfig, mutationRate int) {
+    if rand.Intn(100) < mutationRate {
+        currentLayers := len(config.Layers.Hidden)
+        for i := 0; i < currentLayers; i++ {
+            newLayer := Layer{
+                Neurons: make(map[string]Neuron),
+            }
+
+            // Duplicate neurons
+            for neuronID, neuron := range config.Layers.Hidden[i].Neurons {
+                newNeuronID := fmt.Sprintf("%s_dup", neuronID)
+                newLayer.Neurons[newNeuronID] = neuron
+            }
+
+            // Append the duplicated layer to the hidden layers
+            config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+        }
+
+        //fmt.Printf("Doubled the number of layers, now %d layers in total.\n", len(config.Layers.Hidden))
+    }
+}
+
+// MirrorLayersTopToBottom mirrors the layers from top to bottom (reverse the order)
+func MirrorLayersTopToBottom(config *NetworkConfig, mutationRate int) {
+    if rand.Intn(100) < mutationRate {
+        mirroredLayers := make([]Layer, len(config.Layers.Hidden))
+        for i := range config.Layers.Hidden {
+            mirroredLayers[len(config.Layers.Hidden)-1-i] = config.Layers.Hidden[i]
+        }
+
+        // Append mirrored layers
+        config.Layers.Hidden = append(config.Layers.Hidden, mirroredLayers...)
+        //fmt.Printf("Mirrored the layers from top to bottom.\n")
+    }
+}
+
+// MirrorEdgesSideToSide mirrors the connections in each layer from side to side (reverse the connections)
+func MirrorEdgesSideToSide(config *NetworkConfig, mutationRate int) {
+    if rand.Intn(100) < mutationRate {
+        for _, layer := range config.Layers.Hidden {
+            for neuronID, neuron := range layer.Neurons {
+                mirroredConnections := make(map[string]Connection)
+                for connID, conn := range neuron.Connections {
+                    mirroredConnID := fmt.Sprintf("%s_mirrored", connID)
+                    mirroredConnections[mirroredConnID] = conn
+                }
+
+                // Append mirrored connections to the neuron
+                for mirroredConnID, mirroredConn := range mirroredConnections {
+                    neuron.Connections[mirroredConnID] = mirroredConn
+                }
+                layer.Neurons[neuronID] = neuron
+            }
+        }
+
+        //fmt.Printf("Mirrored the edges in each layer from side to side.\n")
+    }
+}
+
+// ShuffleLayers shuffles the order of hidden layers based on the mutation rate.
+func ShuffleLayers(config *NetworkConfig, mutationRate int) {
+    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
+        return
+    }
+
+    // Decide how many layers to shuffle based on the mutation rate.
+    numLayersToShuffle := int(float64(len(config.Layers.Hidden)) * float64(mutationRate) / 100.0)
+    
+    if numLayersToShuffle == 0 {
+        return
+    }
+
+    // Generate shuffled indices and reorder the hidden layers.
+    indices := rand.Perm(len(config.Layers.Hidden))
+    shuffledLayers := make([]Layer, len(config.Layers.Hidden))
+
+    for i := 0; i < numLayersToShuffle; i++ {
+        shuffledLayers[i] = config.Layers.Hidden[indices[i]]
+    }
+
+    // Update the hidden layers with the shuffled order.
+    config.Layers.Hidden = shuffledLayers
+
+    //fmt.Printf("Shuffled %d layers based on mutation rate of %d%%\n", numLayersToShuffle, mutationRate)
+}
+
 
 
 
