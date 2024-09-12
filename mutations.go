@@ -30,7 +30,7 @@ const (
 // Example usage in MutateNetwork
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
-
+    //fmt.Println(int(MutateWeight))
     // Randomly select the mutation type to apply
     switch rand.Intn(23) { // Updated to include the new mutation types
     case int(MutateWeight):
