@@ -1,11 +1,10 @@
 package dense
 
 import (
-    "fmt"
-    "math/rand"
-    "time"
+	"fmt"
+	"math/rand"
+	"time"
 )
-
 
 // MutationType defines the types of mutations available
 type MutationType int

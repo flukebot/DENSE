@@ -3,12 +3,12 @@ package dense
 import (
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
-	"encoding/json"
 	"path/filepath"
 )
 
