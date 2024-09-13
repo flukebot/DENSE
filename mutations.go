@@ -970,18 +970,24 @@ func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
         // Randomly select two layers to swap activations
         idx1 := rand.Intn(len(config.Layers.Hidden))
         idx2 := rand.Intn(len(config.Layers.Hidden))
+        
         if idx1 != idx2 {
             layer1 := config.Layers.Hidden[idx1]
             layer2 := config.Layers.Hidden[idx2]
-            for neuronID, neuron1 := range layer1.Neurons {
-                neuron2 := layer2.Neurons[neuronID]
-                neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
-                layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
+            
+            // Ensure both layers are of type "dense" and have neurons
+            if layer1.LayerType == "dense" && layer2.LayerType == "dense" && layer1.Neurons != nil && layer2.Neurons != nil {
+                for neuronID, neuron1 := range layer1.Neurons {
+                    if neuron2, ok := layer2.Neurons[neuronID]; ok {
+                        neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
+                        layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
+                    }
+                }
             }
-           //  fmt.Printf("Swapped activation functions between layer %d and layer %d\n", idx1+1, idx2+1)
         }
     }
 }
+
 
 
 func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
