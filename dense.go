@@ -453,10 +453,10 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 			LayerType: "lstm",
 			LSTMCells: []LSTMCell{
 				{
-					InputWeights:  randomSlice(numInputs),
-					ForgetWeights: randomSlice(numInputs),
-					OutputWeights: randomSlice(numInputs),
-					CellWeights:   randomSlice(numInputs),
+					InputWeights:  RandomSlice(numInputs),
+					ForgetWeights: RandomSlice(numInputs),
+					OutputWeights: RandomSlice(numInputs),
+					CellWeights:   RandomSlice(numInputs),
 					Bias:          rand.Float64(),
 				},
 			},
@@ -487,7 +487,7 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 	return config
 }
 
-func randomSlice(length int) []float64 {
+func RandomSlice(length int) []float64 {
 	slice := make([]float64, length)
 	for i := range slice {
 		slice[i] = rand.Float64()
