@@ -347,7 +347,7 @@ func ShuffleLayers(config *NetworkConfig, mutationRate int) {
 
 
 // MutateWeights randomly mutates the network's weights with a given mutation rate
-func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
+func OLDMutateWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
 
     // Ensure mutationRate is within bounds
@@ -416,8 +416,61 @@ func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int
     }
 }
 
+func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
+    rand.Seed(time.Now().UnixNano())
+
+    if mutationRate <= 0 {
+        return
+    }
+
+    // Mutate only dense (FFNN) or convolutional (CNN) layers
+    for _, layer := range config.Layers.Hidden {
+        if layer.LayerType == "dense" { // FFNN layer
+            for neuronID, neuron := range layer.Neurons {
+                for connID := range neuron.Connections {
+                    if rand.Intn(100) < mutationRate {
+                        neuron.Connections[connID] = Connection{
+                            Weight: neuron.Connections[connID].Weight + rand.NormFloat64()*learningRate,
+                        }
+                    }
+                }
+                neuron.Bias += rand.NormFloat64() * learningRate
+                layer.Neurons[neuronID] = neuron
+            }
+        } else if layer.LayerType == "conv" { // CNN layer
+            for i := range layer.Filters {
+                filter := &layer.Filters[i]
+                for x := range filter.Weights {
+                    for y := range filter.Weights[x] {
+                        if rand.Intn(100) < mutationRate {
+                            filter.Weights[x][y] += rand.NormFloat64() * learningRate
+                        }
+                    }
+                }
+                filter.Bias += rand.NormFloat64() * learningRate
+            }
+        }
+    }
+
+    // Also mutate the output layer (which should be FFNN)
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
+            for connID := range neuron.Connections {
+                if rand.Intn(100) < mutationRate {
+                    neuron.Connections[connID] = Connection{
+                        Weight: neuron.Connections[connID].Weight + rand.NormFloat64()*learningRate,
+                    }
+                }
+            }
+            neuron.Bias += rand.NormFloat64() * learningRate
+            config.Layers.Output.Neurons[neuronID] = neuron
+        }
+    }
+}
+
+
 // AddNeuron adds a new neuron to a random hidden layer based on the mutation rate
-func AddNeuron(config *NetworkConfig, mutationRate int) {
+func OLDAddNeuron(config *NetworkConfig, mutationRate int) {
     // Ensure mutationRate is within bounds
     if mutationRate < 0 {
         mutationRate = 0
@@ -477,6 +530,41 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
     }
 }
 
+func AddNeuron(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    // Only add neurons to dense (FFNN) layers
+    for i, layer := range config.Layers.Hidden {
+        if layer.LayerType == "dense" && rand.Intn(100) < mutationRate {
+            neuronID := fmt.Sprintf("neuron%d", len(layer.Neurons)+1)
+            newNeuron := Neuron{
+                ActivationType: randomActivationType(),
+                Connections:    make(map[string]Connection),
+                Bias:           rand.NormFloat64(),
+            }
+
+            // Connect the new neuron to the previous layer
+            var previousLayerNeurons map[string]Neuron
+            if i == 0 {
+                previousLayerNeurons = config.Layers.Input.Neurons
+            } else {
+                previousLayerNeurons = config.Layers.Hidden[i-1].Neurons
+            }
+
+            for prevNeuronID := range previousLayerNeurons {
+                newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
+            }
+
+            // Add the neuron to the current layer
+            layer.Neurons[neuronID] = newNeuron
+            config.Layers.Hidden[i] = layer
+        }
+    }
+}
+
+
 
 // AddLayer adds a new hidden layer with random neurons to the network
 func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
@@ -531,7 +619,7 @@ func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
 
 
 // AddLayer adds a new hidden layer with random sparse connections
-func AddLayer(config *NetworkConfig, mutationRate int) {
+func OLDAddLayer(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             Neurons: make(map[string]Neuron),
@@ -588,6 +676,37 @@ func AddLayer(config *NetworkConfig, mutationRate int) {
     }
 }
 
+func AddLayer(config *NetworkConfig, mutationRate int) {
+    if rand.Intn(100) < mutationRate {
+        newLayer := Layer{
+            Neurons: make(map[string]Neuron),
+        }
+
+        // Only add FFNN or CNN layers
+        if rand.Intn(2) == 0 {
+            newLayer.LayerType = "dense" // FFNN
+            for i := 0; i < rand.Intn(3)+1; i++ {
+                neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
+                newLayer.Neurons[neuronID] = Neuron{
+                    ActivationType: randomActivationType(),
+                    Bias:           rand.Float64(),
+                    Connections:    make(map[string]Connection),
+                }
+            }
+        } else {
+            newLayer.LayerType = "conv" // CNN
+            newLayer.Filters = append(newLayer.Filters, Filter{
+                Weights: Random2DSlice(3, 3),
+                Bias:    rand.Float64(),
+            })
+        }
+
+        // Append to hidden layers
+        config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+    }
+}
+
+
 
 // AddLayer adds a new hidden layer with random sparse connections at a random position
 func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
@@ -639,7 +758,7 @@ func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
 }
 
 // MutateActivationFunctions randomizes the activation functions for all neurons based on the mutation rate
-func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
+func OLDMutateActivationFunctions(config *NetworkConfig, mutationRate int) {
     if mutationRate <= 0 {
         return
     }
@@ -667,6 +786,35 @@ func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
         }
     }
 }
+
+func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    // Mutate only dense (FFNN) layers
+    for _, layer := range config.Layers.Hidden {
+        if layer.LayerType == "dense" {
+            for neuronID, neuron := range layer.Neurons {
+                if rand.Intn(100) < mutationRate {
+                    neuron.ActivationType = randomActivationType()
+                    layer.Neurons[neuronID] = neuron
+                }
+            }
+        }
+    }
+
+    // Also mutate the output layer (which is likely FFNN)
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
+            if rand.Intn(100) < mutationRate {
+                neuron.ActivationType = randomActivationType()
+                config.Layers.Output.Neurons[neuronID] = neuron
+            }
+        }
+    }
+}
+
 
 
 

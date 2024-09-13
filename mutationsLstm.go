@@ -97,3 +97,50 @@ func AddLSTMLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
         config.Layers.Hidden = append(config.Layers.Hidden[:pos], append([]Layer{newLayer}, config.Layers.Hidden[pos:]...)...)
     }
 }
+
+
+// MutateLSTMCells mutates the weights and biases of LSTM cells based on the mutation rate
+func MutateLSTMCells(config *NetworkConfig, mutationRate int) {
+    if mutationRate <= 0 {
+        return
+    }
+
+    // Loop through all layers
+    for _, layer := range config.Layers.Hidden {
+        // Only target LSTM layers
+        if layer.LayerType == "lstm" {
+            // Iterate through each LSTM cell in the layer
+            for i, cell := range layer.LSTMCells {
+                // Mutate the input, forget, output, and cell weights
+                for j := range cell.InputWeights {
+                    if rand.Intn(100) < mutationRate {
+                        cell.InputWeights[j] += rand.NormFloat64()
+                    }
+                }
+                for j := range cell.ForgetWeights {
+                    if rand.Intn(100) < mutationRate {
+                        cell.ForgetWeights[j] += rand.NormFloat64()
+                    }
+                }
+                for j := range cell.OutputWeights {
+                    if rand.Intn(100) < mutationRate {
+                        cell.OutputWeights[j] += rand.NormFloat64()
+                    }
+                }
+                for j := range cell.CellWeights {
+                    if rand.Intn(100) < mutationRate {
+                        cell.CellWeights[j] += rand.NormFloat64()
+                    }
+                }
+                
+                // Mutate the biases
+                if rand.Intn(100) < mutationRate {
+                    cell.Bias += rand.NormFloat64()
+                }
+
+                // Update the mutated LSTM cell in the layer
+                layer.LSTMCells[i] = cell
+            }
+        }
+    }
+}
