@@ -36,14 +36,14 @@ func RandomizeCNNWeights(config *NetworkConfig, mutationRate int) {
         if layer.LayerType == "conv" {
             for i := range layer.Filters {
                 if rand.Intn(100) < mutationRate {
-                    layer.Filters[i].Weights = random2DSlice(len(layer.Filters[i].Weights), len(layer.Filters[i].Weights[0]))
+                    layer.Filters[i].Weights = Random2DSlice(len(layer.Filters[i].Weights), len(layer.Filters[i].Weights[0]))
                 }
             }
         }
     }
 }
 
-func random2DSlice(rows, cols int) [][]float64 {
+func Random2DSlice(rows, cols int) [][]float64 {
     slice := make([][]float64, rows)
     for i := range slice {
         slice[i] = RandomSlice(cols)
@@ -73,7 +73,7 @@ func AddCNNLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
             LayerType: "conv",
             Filters: []Filter{
                 {
-                    Weights: random2DSlice(3, 3),
+                    Weights: Random2DSlice(3, 3),
                     Bias:    rand.Float64(),
                 },
             },
