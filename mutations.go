@@ -29,6 +29,8 @@ const (
 // Example usage in MutateNetwork
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
+
+    //savedInputLayer, savedOutputLayer := saveInputAndOutputLayers(config)
     //fmt.Println(int(MutateWeight))
     // Randomly select the mutation type to apply
     switch rand.Intn(23) { // Updated to include the new mutation types
@@ -79,6 +81,9 @@ func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int
     case 22: // Invert connections
         InvertConnections(config, mutationRate)
     }
+
+
+    //restoreInputAndOutputLayers(config, savedInputLayer, savedOutputLayer)
 }
 
 
@@ -1020,3 +1025,21 @@ func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
     }
 }
 
+
+
+func SaveInputAndOutputLayers(config *NetworkConfig) (inputLayer, outputLayer Layer) {
+    inputLayer = config.Layers.Input   // Save input layer
+    outputLayer = config.Layers.Output // Save output layer
+    return inputLayer, outputLayer
+}
+
+func RestoreInputAndOutputLayers(config *NetworkConfig, inputLayer, outputLayer Layer) {
+    config.Layers.Input = inputLayer   // Restore input layer
+    config.Layers.Output = outputLayer // Restore output layer
+}
+
+func CheckForLayerChanges(original, mutated Layer, layerType string) {
+    if original != mutated {
+        fmt.Printf("Warning: %s layer was altered during mutation!\n", layerType)
+    }
+}
