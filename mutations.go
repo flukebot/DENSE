@@ -25,13 +25,10 @@ const (
     ShuffleLayerConnectionsMutation
     ShuffleLayersMutation // New mutation type to shuffle layers
 )
-
 // Example usage in MutateNetwork
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
 
-    //savedInputLayer, savedOutputLayer := saveInputAndOutputLayers(config)
-    //fmt.Println(int(MutateWeight))
     // Randomly select the mutation type to apply
     switch rand.Intn(23) { // Updated to include the new mutation types
     case int(MutateWeight):
@@ -80,11 +77,38 @@ func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int
         InvertActivationFunctions(config, mutationRate)
     case 22: // Invert connections
         InvertConnections(config, mutationRate)
+
+    // LSTM mutations
+    case 23: 
+        MutateLSTMCells(config, mutationRate)
+    case 24: 
+        AddLSTMLayerAtRandomPosition(config, mutationRate)
+    case 25:
+        InvertLSTMWeights(config, mutationRate)
+    case 26:
+        RandomizeLSTMWeights(config, mutationRate)
+    case 27:
+        MutateLSTMBiases(config, mutationRate, learningRate) // Fixed argument mismatch
+    case 28:
+        MutateLSTMWeights(config, learningRate, mutationRate) // Fixed argument mismatch
+
+    // CNN mutations
+    case 29:
+        MutateCNNWeights(config, learningRate, mutationRate) // Fixed argument mismatch
+    case 30:
+        MutateCNNBiases(config, mutationRate, learningRate)  // Fixed argument mismatch
+    case 31:
+        RandomizeCNNWeights(config, mutationRate) // Fixed argument mismatch
+    case 32:
+        InvertCNNWeights(config, mutationRate)
+
+    case 33:
+        AddCNNLayerAtRandomPosition(config, mutationRate)
     }
 
-
-    //restoreInputAndOutputLayers(config, savedInputLayer, savedOutputLayer)
+    // restoreInputAndOutputLayers(config, savedInputLayer, savedOutputLayer)
 }
+
 
 
 // InvertWeights inverts a percentage of the network's weights based on the mutation rate
