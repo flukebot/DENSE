@@ -978,15 +978,22 @@ func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
             // Ensure both layers are of type "dense" and have neurons
             if layer1.LayerType == "dense" && layer2.LayerType == "dense" && layer1.Neurons != nil && layer2.Neurons != nil {
                 for neuronID, neuron1 := range layer1.Neurons {
-                    if neuron2, ok := layer2.Neurons[neuronID]; ok {
-                        neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
-                        layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
+                    neuron2, ok := layer2.Neurons[neuronID]
+                    if !ok {
+                        continue // Ensure neuron exists in both layers
                     }
+                    if neuron1.Connections == nil || neuron2.Connections == nil {
+                        // Skip if connections are nil
+                        continue
+                    }
+                    neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
+                    layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
                 }
             }
         }
     }
 }
+
 
 
 
