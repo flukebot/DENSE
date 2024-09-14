@@ -1039,7 +1039,47 @@ func RestoreInputAndOutputLayers(config *NetworkConfig, inputLayer, outputLayer 
 }
 
 func CheckForLayerChanges(original, mutated Layer, layerType string) {
-    if original != mutated {
-        fmt.Printf("Warning: %s layer was altered during mutation!\n", layerType)
+    // Check if the number of neurons is different
+    if len(original.Neurons) != len(mutated.Neurons) {
+        fmt.Printf("Warning: %s layer was altered during mutation! (Neuron count changed)\n", layerType)
+        return
     }
+
+    // Iterate over the neurons in the original layer and compare with the mutated layer
+    for neuronID, originalNeuron := range original.Neurons {
+        mutatedNeuron, exists := mutated.Neurons[neuronID]
+        if !exists {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Neuron %s removed)\n", layerType, neuronID)
+            return
+        }
+
+        // Check if the activation function changed
+        if originalNeuron.ActivationType != mutatedNeuron.ActivationType {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Activation function of neuron %s changed)\n", layerType, neuronID)
+            return
+        }
+
+        // Compare connections
+        if len(originalNeuron.Connections) != len(mutatedNeuron.Connections) {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Connection count for neuron %s changed)\n", layerType, neuronID)
+            return
+        }
+
+        for connID, originalConn := range originalNeuron.Connections {
+            mutatedConn, connExists := mutatedNeuron.Connections[connID]
+            if !connExists {
+                fmt.Printf("Warning: %s layer was altered during mutation! (Connection %s for neuron %s removed)\n", layerType, connID, neuronID)
+                return
+            }
+
+            // Optionally, check for weight changes
+            if originalConn.Weight != mutatedConn.Weight {
+                fmt.Printf("Warning: %s layer was altered during mutation! (Connection weight for neuron %s -> %s changed)\n", layerType, neuronID, connID)
+                return
+            }
+        }
+    }
+
+    fmt.Printf("%s layer was not altered during mutation.\n", layerType)
 }
+
