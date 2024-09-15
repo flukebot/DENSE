@@ -4,7 +4,40 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"runtime"
+	"fmt"
+	//"syscall/js"
 )
+
+
+// EnvType represents the environment type
+type EnvType string
+
+const (
+	WASM   EnvType = "WASM"
+	Linux  EnvType = "Linux"
+	MacOS  EnvType = "MacOS"
+	Windows EnvType = "Windows"
+	Unknown EnvType = "Unknown"
+)
+
+// GetEnvType returns the type of environment the program is running on
+func GetEnvType() EnvType {
+	if runtime.GOARCH == "wasm" && runtime.GOOS == "js" {
+		return WASM
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return Linux
+	case "darwin":
+		return MacOS
+	case "windows":
+		return Windows
+	default:
+		return Unknown
+	}
+}
 
 // LoadNetworkConfig loads the neural network configuration from a JSON file.
 func LoadNetworkConfig(filename string) (*NetworkConfig, error) {
@@ -55,4 +88,15 @@ func SaveNetworkToFile(config *NetworkConfig, filename string) error {
 	}
 	err = writeToFile(filename, data)
 	return err
+}
+
+// createDirectory creates a directory if it doesn't already exist.
+func CreateDirectory(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err := os.MkdirAll(path, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create directory: %v", err)
+		}
+	}
+	return nil
 }
