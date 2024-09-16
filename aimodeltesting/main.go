@@ -16,7 +16,7 @@ func main() {
 	modelLocation := "models"
 	methods := []string{"HillClimb"}          // Define the optimization method
 	layerTypes := []string{"FFNN", "CNN", "LSTM"} // Define types of layers to test
-	numModels := 5                     // Number of models to create and test
+	numModels := 100                     // Number of models to create and test
 	cycleAllMutations := true          // Flag to cycle through all mutations
 	topX := 3                          // Number of top models to track
 	loadFilePath := ""                 // Load from file if needed
