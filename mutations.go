@@ -25,156 +25,215 @@ const (
     ShuffleLayerConnectionsMutation
     ShuffleLayersMutation // New mutation type to shuffle layers
 )
-// Example usage in MutateNetwork
-func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
-    rand.Seed(time.Now().UnixNano())
 
-    // Randomly select the mutation type to apply
-    switch rand.Intn(23) { // Updated to include the new mutation types
-    case int(MutateWeight):
-        MutateWeights(config, learningRate, mutationRate)
-    case int(AddNeuronMutation):
-        AddNeuron(config, mutationRate)
-    case int(AddLayerFullConnectionMutation):
-        AddLayerFullConnections(config, mutationRate)
-    case int(AddLayerSparseMutation):
-        AddLayer(config, mutationRate)
-    case int(AddLayerRandomPositionMutation):
-        AddLayerRandomPosition(config, mutationRate)
-    case int(MutateActivationFunction):
-        MutateActivationFunctions(config, mutationRate)
-    case int(RemoveNeuronMutation):
-        RemoveNeuron(config, mutationRate)
-    case int(RemoveLayerMutation):
-        RemoveLayer(config, mutationRate)
-    case int(DuplicateNeuronMutation):
-        DuplicateNeuron(config, mutationRate)
-    case int(MutateBiasMutation):
-        MutateBiases(config, mutationRate, learningRate)
-    case int(RandomizeWeightsMutation):
-        RandomizeWeights(config, mutationRate)
-    case int(SplitNeuronMutation):
-        SplitNeuron(config, mutationRate)
-    case int(SwapLayerActivationsMutation):
-        SwapLayerActivations(config, mutationRate)
-    case int(ShuffleLayerConnectionsMutation):
-        ShuffleLayerConnections(config, mutationRate)
-    case int(ShuffleLayersMutation):
-        ShuffleLayers(config, mutationRate)
-    case 15: // Add multiple random layers
-        AddMultipleLayers(config, mutationRate)
-    case 16: // Double the number of layers
-        DoubleLayers(config, mutationRate)
-    case 17: // Mirror layers from top to bottom
-        MirrorLayersTopToBottom(config, mutationRate)
-    case 18: // Mirror edges from side to side
-        MirrorEdgesSideToSide(config, mutationRate)
-    case 19: // Invert weights
-        InvertWeights(config, mutationRate)
-    case 20: // Invert biases
-        InvertBiases(config, mutationRate)
-    case 21: // Invert activation functions
-        InvertActivationFunctions(config, mutationRate)
-    case 22: // Invert connections
-        InvertConnections(config, mutationRate)
 
-    // LSTM mutations
-    case 23: 
-        MutateLSTMCells(config, mutationRate)
-    case 24: 
-        AddLSTMLayerAtRandomPosition(config, mutationRate)
-    case 25:
-        InvertLSTMWeights(config, mutationRate)
-    case 26:
-        RandomizeLSTMWeights(config, mutationRate)
-    case 27:
-        MutateLSTMBiases(config, mutationRate, learningRate) // Fixed argument mismatch
-    case 28:
-        MutateLSTMWeights(config, learningRate, mutationRate) // Fixed argument mismatch
 
-    // CNN mutations
-    case 29:
-        MutateCNNWeights(config, learningRate, mutationRate) // Fixed argument mismatch
-    case 30:
-        MutateCNNBiases(config, mutationRate, learningRate)  // Fixed argument mismatch
-    case 31:
-        RandomizeCNNWeights(config, mutationRate) // Fixed argument mismatch
-    case 32:
-        InvertCNNWeights(config, mutationRate)
+// Maintain separate lists of mutation functions for FFNN, LSTM, and CNN
+var LSTffnnMutations = map[string]MutationFunc{
+	"FFNN_MutateWeights": MutateWeights,
+    "FFNN_AddNeuron": AddNeuron,
+    "FFNN_AddLayerFullConnections": AddLayerFullConnections,
+    "FFNN_AddLayer": AddLayer,
+    "FFNN_AddLayerRandomPosition": AddLayerRandomPosition,
+    "FFNN_MutateActivationFunctions": MutateActivationFunctions,
+    "FFNN_RemoveNeuron": RemoveNeuron,
+    "FFNN_RemoveLayer": RemoveLayer,
+    "FFNN_DuplicateNeuron": DuplicateNeuron,
+    "FFNN_MutateBiases": MutateBiases,
+    "FFNN_RandomizeWeights": RandomizeWeights,
+    "FFNN_SplitNeuron": SplitNeuron,
+    "FFNN_SwapLayerActivations": SwapLayerActivations,
+    "FFNN_ShuffleLayerConnections": ShuffleLayerConnections,
+    "FFNN_ShuffleLayers": ShuffleLayers,
+    "FFNN_AddMultipleLayers": AddMultipleLayers,
+    "FFNN_DoubleLayers": DoubleLayers,
+    "FFNN_MirrorLayersTopToBottom": MirrorLayersTopToBottom,
+    "FFNN_MirrorEdgesSideToSide": MirrorEdgesSideToSide,
+    "FFNN_InvertWeights": InvertWeights,
+    "FFNN_InvertBiases": InvertBiases,
+    "FFNN_InvertActivationFunctions": InvertActivationFunctions,
+    "FFNN_InvertConnections": InvertConnections,
+}
 
-    case 33:
-        AddCNNLayerAtRandomPosition(config, mutationRate)
+var LSTlstmMutations = map[string]MutationFunc{
+	"LSTM_MutateLSTMWeights": MutateLSTMWeights,
+    "LSTM_MutateLSTMBiases": MutateLSTMBiases,
+    "LSTM_RandomizeLSTMWeights": RandomizeLSTMWeights,
+    "LSTM_InvertLSTMWeights": InvertLSTMWeights,
+    "LSTM_AddLSTMLayerAtRandomPosition": AddLSTMLayerAtRandomPosition,
+    "LSTM_MutateLSTMCells": MutateLSTMCells,
+}
+
+var LSTcnnMutations = map[string]MutationFunc{
+	"CNN_MutateCNNWeights": MutateCNNWeights,
+    "CNN_MutateCNNBiases": MutateCNNBiases,
+    "CNN_RandomizeCNNWeights": RandomizeCNNWeights,
+    "CNN_InvertCNNWeights": InvertCNNWeights,
+    "CNN_AddCNNLayerAtRandomPosition": AddCNNLayerAtRandomPosition,
+}
+
+// Define a common function signature for all mutation functions
+type MutationFunc func(args ...interface{}) error
+
+
+
+func AddFFNNLayer(config *NetworkConfig) error {
+    newLayer := Layer{
+        LayerType: "dense",
+        Neurons:   make(map[string]Neuron),
     }
 
-    // restoreInputAndOutputLayers(config, savedInputLayer, savedOutputLayer)
+    // Define the number of neurons to add in this layer
+    numNeurons := rand.Intn(3) + 1 // Adding 1 to 3 neurons, adjust as necessary
+
+    for i := 0; i < numNeurons; i++ {
+        neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
+        newNeuron := Neuron{
+            ActivationType: randomActivationType(),
+            Bias:           rand.Float64(),
+            Connections:    make(map[string]Connection),
+        }
+
+        // Connect the new neuron to the previous layer's neurons
+        var previousLayerNeurons map[string]Neuron
+        if len(config.Layers.Hidden) == 0 {
+            previousLayerNeurons = config.Layers.Input.Neurons
+        } else {
+            previousLayerNeurons = config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons
+        }
+
+        for prevNeuronID := range previousLayerNeurons {
+            newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
+        }
+
+        newLayer.Neurons[neuronID] = newNeuron
+    }
+
+    config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+    return nil
 }
 
 
 
-// InvertWeights inverts a percentage of the network's weights based on the mutation rate
-func InvertWeights(config *NetworkConfig, mutationRate int) {
+func InvertWeights(args ...interface{}) error {
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for InvertWeights")
+    }
+
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if mutationRate <= 0 {
-        return
+        return nil
     }
 
     for _, layer := range config.Layers.Hidden {
-        for neuronID, neuron := range layer.Neurons {
-            for connID, conn := range neuron.Connections {
-                if rand.Intn(100) < mutationRate {
-                    conn.Weight = -conn.Weight // Invert the weight
-                    neuron.Connections[connID] = conn
+        if layer.LayerType == "dense" {
+            for neuronID, neuron := range layer.Neurons {
+                for connID, conn := range neuron.Connections {
+                    if rand.Intn(100) < mutationRate {
+                        conn.Weight = -conn.Weight
+                        neuron.Connections[connID] = conn
+                    }
                 }
-            }
-            layer.Neurons[neuronID] = neuron
-        }
-    }
-
-    for neuronID, neuron := range config.Layers.Output.Neurons {
-        for connID, conn := range neuron.Connections {
-            if rand.Intn(100) < mutationRate {
-                conn.Weight = -conn.Weight // Invert the weight
-                neuron.Connections[connID] = conn
-            }
-        }
-        config.Layers.Output.Neurons[neuronID] = neuron
-    }
-
-    //fmt.Printf("Inverted weights with mutation rate of %d%%.\n", mutationRate)
-}
-
-// InvertBiases inverts a percentage of the neuron biases based on the mutation rate
-func InvertBiases(config *NetworkConfig, mutationRate int) {
-    if mutationRate <= 0 {
-        return
-    }
-
-    for _, layer := range config.Layers.Hidden {
-        for neuronID, neuron := range layer.Neurons {
-            if rand.Intn(100) < mutationRate {
-                neuron.Bias = -neuron.Bias // Invert the bias
                 layer.Neurons[neuronID] = neuron
             }
         }
     }
 
-    for neuronID, neuron := range config.Layers.Output.Neurons {
-        if rand.Intn(100) < mutationRate {
-            neuron.Bias = -neuron.Bias // Invert the bias
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
+            for connID, conn := range neuron.Connections {
+                if rand.Intn(100) < mutationRate {
+                    conn.Weight = -conn.Weight
+                    neuron.Connections[connID] = conn
+                }
+            }
             config.Layers.Output.Neurons[neuronID] = neuron
         }
     }
 
-    //fmt.Printf("Inverted biases with mutation rate of %d%%.\n", mutationRate)
+    return nil
 }
 
-// InvertActivationFunctions inverts the activation functions based on mutation rate
-func InvertActivationFunctions(config *NetworkConfig, mutationRate int) {
-    if mutationRate <= 0 {
-        return
+
+func InvertBiases(args ...interface{}) error {
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for InvertBiases")
     }
 
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    if mutationRate <= 0 {
+        return nil
+    }
+
+    for _, layer := range config.Layers.Hidden {
+        if layer.LayerType == "dense" {
+            for neuronID, neuron := range layer.Neurons {
+                if rand.Intn(100) < mutationRate {
+                    neuron.Bias = -neuron.Bias
+                    layer.Neurons[neuronID] = neuron
+                }
+            }
+        }
+    }
+
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
+            if rand.Intn(100) < mutationRate {
+                neuron.Bias = -neuron.Bias
+                config.Layers.Output.Neurons[neuronID] = neuron
+            }
+        }
+    }
+
+    return nil
+}
+
+
+// InvertActivationFunctions inverts the activation functions based on mutation rate
+func InvertActivationFunctions(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for InvertActivationFunctions")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Check if mutationRate is valid
+    if mutationRate <= 0 {
+        return nil
+    }
+
+    // Define the activation inversion mapping
     activationInversionMap := map[string]string{
-        "relu":       "leaky_relu", // Replace with an "opposite" or alternate activation
+        "relu":       "leaky_relu",
         "sigmoid":    "tanh",
         "tanh":       "sigmoid",
         "leaky_relu": "relu",
@@ -182,35 +241,77 @@ func InvertActivationFunctions(config *NetworkConfig, mutationRate int) {
 
     // Randomly mutate activation functions for neurons in hidden layers
     for _, layer := range config.Layers.Hidden {
-        for neuronID, neuron := range layer.Neurons {
-            if rand.Intn(100) < mutationRate {
-                invertedActivation := activationInversionMap[neuron.ActivationType]
-                neuron.ActivationType = invertedActivation
-                layer.Neurons[neuronID] = neuron
+        if layer.LayerType == "dense" {
+            for neuronID, neuron := range layer.Neurons {
+                if rand.Intn(100) < mutationRate {
+                    invertedActivation := activationInversionMap[neuron.ActivationType]
+                    neuron.ActivationType = invertedActivation
+                    layer.Neurons[neuronID] = neuron
+                }
             }
         }
     }
 
     // Randomly mutate activation functions for neurons in output layer
-    for neuronID, neuron := range config.Layers.Output.Neurons {
-        if rand.Intn(100) < mutationRate {
-            invertedActivation := activationInversionMap[neuron.ActivationType]
-            neuron.ActivationType = invertedActivation
-            config.Layers.Output.Neurons[neuronID] = neuron
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
+            if rand.Intn(100) < mutationRate {
+                invertedActivation := activationInversionMap[neuron.ActivationType]
+                neuron.ActivationType = invertedActivation
+                config.Layers.Output.Neurons[neuronID] = neuron
+            }
         }
     }
 
-    //fmt.Printf("Inverted activation functions with mutation rate of %d%%.\n", mutationRate)
+    return nil
 }
 
+
 // InvertConnections inverts a percentage of connections between neurons based on mutation rate
-func InvertConnections(config *NetworkConfig, mutationRate int) {
-    if mutationRate <= 0 {
-        return
+func InvertConnections(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for InvertConnections")
     }
 
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Check if mutationRate is valid
+    if mutationRate <= 0 {
+        return nil
+    }
+
+    // Invert connections for neurons in hidden layers
     for _, layer := range config.Layers.Hidden {
-        for neuronID, neuron := range layer.Neurons {
+        if layer.LayerType == "dense" {
+            for neuronID, neuron := range layer.Neurons {
+                invertedConnections := make(map[string]Connection)
+                for connID, conn := range neuron.Connections {
+                    if rand.Intn(100) < mutationRate {
+                        invertedConnections[connID] = Connection{Weight: -conn.Weight} // Invert the connection weight
+                    } else {
+                        invertedConnections[connID] = conn
+                    }
+                }
+                neuron.Connections = invertedConnections
+                layer.Neurons[neuronID] = neuron
+            }
+        }
+    }
+
+    // Invert connections for neurons in the output layer
+    if config.Layers.Output.LayerType == "dense" {
+        for neuronID, neuron := range config.Layers.Output.Neurons {
             invertedConnections := make(map[string]Connection)
             for connID, conn := range neuron.Connections {
                 if rand.Intn(100) < mutationRate {
@@ -220,33 +321,40 @@ func InvertConnections(config *NetworkConfig, mutationRate int) {
                 }
             }
             neuron.Connections = invertedConnections
-            layer.Neurons[neuronID] = neuron
+            config.Layers.Output.Neurons[neuronID] = neuron
         }
     }
 
-    for neuronID, neuron := range config.Layers.Output.Neurons {
-        invertedConnections := make(map[string]Connection)
-        for connID, conn := range neuron.Connections {
-            if rand.Intn(100) < mutationRate {
-                invertedConnections[connID] = Connection{Weight: -conn.Weight} // Invert the connection weight
-            } else {
-                invertedConnections[connID] = conn
-            }
-        }
-        neuron.Connections = invertedConnections
-        config.Layers.Output.Neurons[neuronID] = neuron
-    }
-
-    //fmt.Printf("Inverted neuron connections with mutation rate of %d%%.\n", mutationRate)
+    return nil
 }
 
 
+
 // AddMultipleLayers adds a random number of layers to the network
-func AddMultipleLayers(config *NetworkConfig, mutationRate int) {
+func AddMultipleLayers(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddMultipleLayers")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     rand.Seed(time.Now().UnixNano())
 
+    // Check if we should apply the mutation based on the mutation rate
     if rand.Intn(100) < mutationRate {
         numNewLayers := rand.Intn(5) + 1 // Add 1 to 5 layers randomly
+
         for i := 0; i < numNewLayers; i++ {
             newLayer := Layer{
                 Neurons: make(map[string]Neuron),
@@ -281,12 +389,33 @@ func AddMultipleLayers(config *NetworkConfig, mutationRate int) {
             config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
         }
 
-        //fmt.Printf("Added %d new layers to the network.\n", numNewLayers)
+        // Optionally, you can log or return information about the added layers here.
+        // fmt.Printf("Added %d new layers to the network.\n", numNewLayers)
     }
+
+    return nil
 }
 
+
 // DoubleLayers duplicates the current layers in the network
-func DoubleLayers(config *NetworkConfig, mutationRate int) {
+func DoubleLayers(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for DoubleLayers")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         currentLayers := len(config.Layers.Hidden)
         for i := 0; i < currentLayers; i++ {
@@ -304,12 +433,33 @@ func DoubleLayers(config *NetworkConfig, mutationRate int) {
             config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
         }
 
-        //fmt.Printf("Doubled the number of layers, now %d layers in total.\n", len(config.Layers.Hidden))
+        // Optionally, you can log or return information about the doubled layers.
+        // fmt.Printf("Doubled the number of layers, now %d layers in total.\n", len(config.Layers.Hidden))
     }
+
+    return nil
 }
 
+
 // MirrorLayersTopToBottom mirrors the layers from top to bottom (reverse the order)
-func MirrorLayersTopToBottom(config *NetworkConfig, mutationRate int) {
+func MirrorLayersTopToBottom(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for MirrorLayersTopToBottom")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         mirroredLayers := make([]Layer, len(config.Layers.Hidden))
         for i := range config.Layers.Hidden {
@@ -318,44 +468,88 @@ func MirrorLayersTopToBottom(config *NetworkConfig, mutationRate int) {
 
         // Append mirrored layers
         config.Layers.Hidden = append(config.Layers.Hidden, mirroredLayers...)
-        //fmt.Printf("Mirrored the layers from top to bottom.\n")
+        // Optionally, you can log or return information about the mirrored layers.
+        // fmt.Printf("Mirrored the layers from top to bottom.\n")
     }
+
+    return nil
 }
 
+
 // MirrorEdgesSideToSide mirrors the connections in each layer from side to side (reverse the connections)
-func MirrorEdgesSideToSide(config *NetworkConfig, mutationRate int) {
+func MirrorEdgesSideToSide(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for MirrorEdgesSideToSide")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         for _, layer := range config.Layers.Hidden {
-            for neuronID, neuron := range layer.Neurons {
-                mirroredConnections := make(map[string]Connection)
-                for connID, conn := range neuron.Connections {
-                    mirroredConnID := fmt.Sprintf("%s_mirrored", connID)
-                    mirroredConnections[mirroredConnID] = conn
-                }
+            if layer.LayerType == "dense" {
+                for neuronID, neuron := range layer.Neurons {
+                    mirroredConnections := make(map[string]Connection)
+                    for connID, conn := range neuron.Connections {
+                        mirroredConnID := fmt.Sprintf("%s_mirrored", connID)
+                        mirroredConnections[mirroredConnID] = conn
+                    }
 
-                // Append mirrored connections to the neuron
-                for mirroredConnID, mirroredConn := range mirroredConnections {
-                    neuron.Connections[mirroredConnID] = mirroredConn
+                    // Append mirrored connections to the neuron
+                    for mirroredConnID, mirroredConn := range mirroredConnections {
+                        neuron.Connections[mirroredConnID] = mirroredConn
+                    }
+                    layer.Neurons[neuronID] = neuron
                 }
-                layer.Neurons[neuronID] = neuron
             }
         }
 
-        //fmt.Printf("Mirrored the edges in each layer from side to side.\n")
+        // Optionally, log the mirroring of connections.
+        // fmt.Printf("Mirrored the edges in each layer from side to side.\n")
     }
+
+    return nil
 }
 
+
 // ShuffleLayers shuffles the order of hidden layers based on the mutation rate.
-func ShuffleLayers(config *NetworkConfig, mutationRate int) {
+func ShuffleLayers(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for ShuffleLayers")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
-        return
+        return nil
     }
 
     // Decide how many layers to shuffle based on the mutation rate.
     numLayersToShuffle := int(float64(len(config.Layers.Hidden)) * float64(mutationRate) / 100.0)
-    
+
     if numLayersToShuffle == 0 {
-        return
+        return nil
     }
 
     // Generate shuffled indices and reorder the hidden layers.
@@ -369,92 +563,39 @@ func ShuffleLayers(config *NetworkConfig, mutationRate int) {
     // Update the hidden layers with the shuffled order.
     config.Layers.Hidden = shuffledLayers
 
-    //fmt.Printf("Shuffled %d layers based on mutation rate of %d%%\n", numLayersToShuffle, mutationRate)
+    // Optionally, log the shuffling of layers.
+    // fmt.Printf("Shuffled %d layers based on mutation rate of %d%%\n", numLayersToShuffle, mutationRate)
+
+    return nil
 }
 
 
-
-
-// MutateWeights randomly mutates the network's weights with a given mutation rate
-func OLDMutateWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
-    rand.Seed(time.Now().UnixNano())
-
-    // Ensure mutationRate is within bounds
-    if mutationRate < 0 {
-        mutationRate = 0
-    } else if mutationRate > 100 {
-        mutationRate = 100
+func MutateWeights(args ...interface{}) error {
+    if len(args) < 3 {
+        return fmt.Errorf("insufficient arguments for MutateWeights")
     }
 
-    // Step 1: Count total number of weights and biases
-    totalWeights := 0
-    for _, layer := range config.Layers.Hidden {
-        for _, neuron := range layer.Neurons {
-            totalWeights += len(neuron.Connections) // Add the number of connections (weights)
-            totalWeights++                         // Count the bias as part of the weights
-        }
-    }
-    for _, neuron := range config.Layers.Output.Neurons {
-        totalWeights += len(neuron.Connections) // Add the number of connections (weights)
-        totalWeights++                         // Count the bias as part of the weights
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
     }
 
-    // Step 2: Calculate how many weights to mutate based on mutation rate
-    weightsToMutate := int(float64(totalWeights) * (float64(mutationRate) / 100.0))
-
-    // Step 3: Randomly choose which weights to mutate
-    mutatedCount := 0
-    for _, layer := range config.Layers.Hidden {
-        for _, neuron := range layer.Neurons {
-            for connID := range neuron.Connections {
-                if mutatedCount >= weightsToMutate {
-                    break
-                }
-                // Randomly decide if we mutate this connection (weight)
-                if rand.Float64() < float64(weightsToMutate-mutatedCount)/float64(totalWeights-mutatedCount) {
-                    neuron.Connections[connID] = Connection{
-                        Weight: neuron.Connections[connID].Weight + rand.NormFloat64()*learningRate,
-                    }
-                    mutatedCount++
-                }
-            }
-            if mutatedCount >= weightsToMutate {
-                break
-            }
-            // Randomly decide if we mutate this neuron's bias
-            if mutatedCount < weightsToMutate && rand.Float64() < float64(weightsToMutate-mutatedCount)/float64(totalWeights-mutatedCount) {
-                neuron.Bias += rand.NormFloat64() * learningRate
-                mutatedCount++
-            }
-        }
+    learningRate, ok := args[1].(float64)
+    if !ok {
+        return fmt.Errorf("invalid type for learningRate")
     }
 
-    // Mutate output layer weights and biases
-    for _, neuron := range config.Layers.Output.Neurons {
-        for connID := range neuron.Connections {
-            if rand.Float64() < float64(mutationRate)/100.0 {
-                neuron.Connections[connID] = Connection{
-                    Weight: neuron.Connections[connID].Weight + rand.NormFloat64()*learningRate,
-                }
-            }
-        }
-        // Mutate output neuron bias
-        if rand.Float64() < float64(mutationRate)/100.0 {
-            neuron.Bias += rand.NormFloat64() * learningRate
-        }
+    mutationRate, ok := args[2].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
     }
-}
-
-func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
-    rand.Seed(time.Now().UnixNano())
 
     if mutationRate <= 0 {
-        return
+        return nil
     }
 
-    // Mutate only dense (FFNN) or convolutional (CNN) layers
     for _, layer := range config.Layers.Hidden {
-        if layer.LayerType == "dense" { // FFNN layer
+        if layer.LayerType == "dense" {
             for neuronID, neuron := range layer.Neurons {
                 for connID := range neuron.Connections {
                     if rand.Intn(100) < mutationRate {
@@ -466,22 +607,9 @@ func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int
                 neuron.Bias += rand.NormFloat64() * learningRate
                 layer.Neurons[neuronID] = neuron
             }
-        } else if layer.LayerType == "conv" { // CNN layer
-            for i := range layer.Filters {
-                filter := &layer.Filters[i]
-                for x := range filter.Weights {
-                    for y := range filter.Weights[x] {
-                        if rand.Intn(100) < mutationRate {
-                            filter.Weights[x][y] += rand.NormFloat64() * learningRate
-                        }
-                    }
-                }
-                filter.Bias += rand.NormFloat64() * learningRate
-            }
         }
     }
 
-    // Also mutate the output layer (which should be FFNN)
     if config.Layers.Output.LayerType == "dense" {
         for neuronID, neuron := range config.Layers.Output.Neurons {
             for connID := range neuron.Connections {
@@ -495,76 +623,30 @@ func MutateWeights(config *NetworkConfig, learningRate float64, mutationRate int
             config.Layers.Output.Neurons[neuronID] = neuron
         }
     }
+
+    return nil
 }
 
 
-// AddNeuron adds a new neuron to a random hidden layer based on the mutation rate
-func OLDAddNeuron(config *NetworkConfig, mutationRate int) {
-    // Ensure mutationRate is within bounds
-    if mutationRate < 0 {
-        mutationRate = 0
-    } else if mutationRate > 100 {
-        mutationRate = 100
+func AddNeuron(args ...interface{}) error {
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddNeuron")
     }
 
-    // Check if there are any hidden layers to add a neuron to
-    if len(config.Layers.Hidden) == 0 {
-       //  fmt.Println("No hidden layers found. Adding a new layer first.")
-        AddLayer(config, mutationRate) // Add a new layer if there are none
-        return
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
     }
 
-    // Randomly decide if we should add a neuron based on the mutation rate
-    if rand.Intn(100) < mutationRate {
-        // Randomly pick an existing hidden layer to add the neuron to
-        layerIdx := rand.Intn(len(config.Layers.Hidden))
-        layer := &config.Layers.Hidden[layerIdx]
-
-        // Add the new neuron
-        neuronID := fmt.Sprintf("neuron%d", len(layer.Neurons)+1)
-        newNeuron := Neuron{
-            ActivationType: randomActivationType(),
-            Connections:    make(map[string]Connection),
-            Bias:           rand.NormFloat64(),
-        }
-
-        // Connect the new neuron to the previous layer
-        var previousLayerNeurons map[string]Neuron
-        if layerIdx == 0 {
-            previousLayerNeurons = config.Layers.Input.Neurons
-        } else {
-            previousLayerNeurons = config.Layers.Hidden[layerIdx-1].Neurons
-        }
-        for prevNeuronID := range previousLayerNeurons {
-            newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
-        }
-
-        // Connect the new neuron to the next layer (if it exists)
-        if layerIdx < len(config.Layers.Hidden)-1 {
-            nextLayer := &config.Layers.Hidden[layerIdx+1]
-            for nextNeuronID := range nextLayer.Neurons {
-                nextLayer.Neurons[nextNeuronID].Connections[neuronID] = Connection{Weight: rand.NormFloat64()}
-            }
-        } else {
-            // Connect the new neuron to the output layer
-            for outputNeuronID := range config.Layers.Output.Neurons {
-                config.Layers.Output.Neurons[outputNeuronID].Connections[neuronID] = Connection{Weight: rand.NormFloat64()}
-            }
-        }
-
-        // Add the new neuron to the selected layer
-        layer.Neurons[neuronID] = newNeuron
-
-       //  fmt.Printf("Added a new neuron to hidden layer %d\n", layerIdx+1)
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
     }
-}
 
-func AddNeuron(config *NetworkConfig, mutationRate int) {
     if mutationRate <= 0 {
-        return
+        return nil
     }
 
-    // Only add neurons to dense (FFNN) layers
     for i, layer := range config.Layers.Hidden {
         if layer.LayerType == "dense" && rand.Intn(100) < mutationRate {
             neuronID := fmt.Sprintf("neuron%d", len(layer.Neurons)+1)
@@ -574,7 +656,6 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
                 Bias:           rand.NormFloat64(),
             }
 
-            // Connect the new neuron to the previous layer
             var previousLayerNeurons map[string]Neuron
             if i == 0 {
                 previousLayerNeurons = config.Layers.Input.Neurons
@@ -586,17 +667,35 @@ func AddNeuron(config *NetworkConfig, mutationRate int) {
                 newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
             }
 
-            // Add the neuron to the current layer
             layer.Neurons[neuronID] = newNeuron
             config.Layers.Hidden[i] = layer
         }
     }
+
+    return nil
 }
 
 
 
-// AddLayer adds a new hidden layer with random neurons to the network
-func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
+// AddLayerFullConnections adds a new hidden layer with random neurons to the network
+func AddLayerFullConnections(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddLayerFullConnections")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             Neurons: make(map[string]Neuron),
@@ -625,87 +724,42 @@ func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
-           //  fmt.Printf("Added neuron %s to new layer with connections to previous layer\n", neuronID)
         }
 
         // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
-        if len(config.Layers.Hidden) == 0 {
-           //  fmt.Println("Connecting new layer to the output layer directly")
-        }
-        //for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
         for _, outputNeuron := range config.Layers.Output.Neurons {
             for newNeuronID := range newLayer.Neurons {
                 outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
-               //  fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
             }
         }
 
         // Append the new layer to the hidden layers
         config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
-       //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
     }
+
+    return nil
 }
 
 
-// AddLayer adds a new hidden layer with random sparse connections
-func OLDAddLayer(config *NetworkConfig, mutationRate int) {
-    if rand.Intn(100) < mutationRate {
-        newLayer := Layer{
-            Neurons: make(map[string]Neuron),
-        }
 
-        // Add 1 to 3 neurons to this new layer
-        numNewNeurons := rand.Intn(3) + 1
-        for i := 0; i < numNewNeurons; i++ {
-            neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
-            newNeuron := Neuron{
-                ActivationType: randomActivationType(),
-                Connections:    make(map[string]Connection),
-                Bias:           rand.NormFloat64(),
-            }
-
-            // Connect the new neuron to a random subset of the previous layer's neurons
-            var previousLayerNeurons map[string]Neuron
-            if len(config.Layers.Hidden) == 0 {
-                previousLayerNeurons = config.Layers.Input.Neurons
-            } else {
-                previousLayerNeurons = config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons
-            }
-
-            // Generate a random connection ratio between 0 and 1 for sparse connections
-            connectionRatio := rand.Float64()
-
-            // Create sparse connections based on random connectionRatio
-            for prevNeuronID := range previousLayerNeurons {
-                if rand.Float64() < connectionRatio {  // Random connection
-                    newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
-                }
-            }
-
-            // Add the new neuron to the layer
-            newLayer.Neurons[neuronID] = newNeuron
-           //  fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
-        }
-
-        // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
-        if len(config.Layers.Hidden) == 0 {
-           //  fmt.Println("Connecting new layer to the output layer directly")
-        }
-        //for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
-        for _, outputNeuron := range config.Layers.Output.Neurons {
-            for newNeuronID := range newLayer.Neurons {
-                outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
-               //  fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
-            }
-        }
-
-        // Append the new layer to the hidden layers
-        config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
-       //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
+func AddLayer(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddLayer")
     }
-}
 
-func AddLayer(config *NetworkConfig, mutationRate int) {
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             Neurons: make(map[string]Neuron),
@@ -733,12 +787,30 @@ func AddLayer(config *NetworkConfig, mutationRate int) {
         // Append to hidden layers
         config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
     }
+
+    return nil
 }
 
 
 
-// AddLayer adds a new hidden layer with random sparse connections at a random position
-func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
+func AddLayerRandomPosition(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddLayerRandomPosition")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             Neurons: make(map[string]Neuron),
@@ -774,7 +846,6 @@ func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
 
             // Add the new neuron to the layer
             newLayer.Neurons[neuronID] = newNeuron
-           //  fmt.Printf("Added neuron %s to new layer with random sparse connections (ratio: %.2f)\n", neuronID, connectionRatio)
         }
 
         // Randomly choose a position to insert the new layer
@@ -782,43 +853,31 @@ func AddLayerRandomPosition(config *NetworkConfig, mutationRate int) {
 
         // Insert the new layer at the randomly chosen position
         config.Layers.Hidden = append(config.Layers.Hidden[:insertPosition], append([]Layer{newLayer}, config.Layers.Hidden[insertPosition:]...)...)
-       //  fmt.Printf("Inserted a new hidden layer with %d neurons at position %d\n", numNewNeurons, insertPosition+1)
     }
+
+    return nil
 }
 
-// MutateActivationFunctions randomizes the activation functions for all neurons based on the mutation rate
-func OLDMutateActivationFunctions(config *NetworkConfig, mutationRate int) {
+func MutateActivationFunctions(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for MutateActivationFunctions")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if mutationRate <= 0 {
-        return
-    }
-
-    // Randomly mutate activation functions for neurons in hidden layers
-    for _, layer := range config.Layers.Hidden {
-        for neuronID, neuron := range layer.Neurons {
-            // Randomly decide if we mutate this neuron's activation function
-            if rand.Intn(100) < mutationRate {
-                newActivation := randomActivationType()
-                neuron.ActivationType = newActivation
-                layer.Neurons[neuronID] = neuron // Apply the mutation
-               //  fmt.Printf("Mutated activation function of neuron %s to %s\n", neuronID, newActivation)
-            }
-        }
-    }
-
-    // Randomly mutate activation functions for neurons in output layer
-    for neuronID, neuron := range config.Layers.Output.Neurons {
-        if rand.Intn(100) < mutationRate {
-            newActivation := randomActivationType()
-            neuron.ActivationType = newActivation
-            config.Layers.Output.Neurons[neuronID] = neuron // Apply the mutation
-           //  fmt.Printf("Mutated activation function of output neuron %s to %s\n", neuronID, newActivation)
-        }
-    }
-}
-
-func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
-    if mutationRate <= 0 {
-        return
+        return nil
     }
 
     // Mutate only dense (FFNN) layers
@@ -842,7 +901,10 @@ func MutateActivationFunctions(config *NetworkConfig, mutationRate int) {
             }
         }
     }
+
+    return nil
 }
+
 
 
 
@@ -856,111 +918,241 @@ func randomActivationType() string {
 
 
 
-func RemoveNeuron(config *NetworkConfig, mutationRate int) {
-    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
-        return
+func RemoveNeuron(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for RemoveNeuron")
     }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Check if there are any hidden layers and valid mutation rate
+    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
+        return nil
+    }
+
+    // Iterate over the hidden layers to randomly remove a neuron
     for layerIdx := range config.Layers.Hidden {
         if rand.Intn(100) < mutationRate && len(config.Layers.Hidden[layerIdx].Neurons) > 1 {
             // Randomly select a neuron to remove
             for neuronID := range config.Layers.Hidden[layerIdx].Neurons {
                 delete(config.Layers.Hidden[layerIdx].Neurons, neuronID)
-               //  fmt.Printf("Removed neuron %s from hidden layer %d\n", neuronID, layerIdx+1)
                 break
             }
             break
         }
     }
+
+    return nil
 }
 
-func RemoveLayer(config *NetworkConfig, mutationRate int) {
-    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
-        return
+
+func RemoveLayer(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for RemoveLayer")
     }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Check if there are hidden layers and valid mutation rate
+    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
+        return nil
+    }
+
+    // Remove a random layer based on mutation rate
     if rand.Intn(100) < mutationRate {
         layerIdx := rand.Intn(len(config.Layers.Hidden))
         config.Layers.Hidden = append(config.Layers.Hidden[:layerIdx], config.Layers.Hidden[layerIdx+1:]...)
-       //  fmt.Printf("Removed hidden layer at position %d\n", layerIdx+1)
     }
+
+    return nil
 }
 
 
-func DuplicateNeuron(config *NetworkConfig, mutationRate int) {
-    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
-        return
+
+func DuplicateNeuron(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for DuplicateNeuron")
     }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Check if there are hidden layers and valid mutation rate
+    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
+        return nil
+    }
+
+    // Duplicate a neuron based on the mutation rate
     for layerIdx := range config.Layers.Hidden {
         if rand.Intn(100) < mutationRate {
             // Randomly select a neuron to duplicate
             for neuronID, neuron := range config.Layers.Hidden[layerIdx].Neurons {
                 newNeuronID := fmt.Sprintf("%s_dup", neuronID)
                 config.Layers.Hidden[layerIdx].Neurons[newNeuronID] = neuron
-               //  fmt.Printf("Duplicated neuron %s as %s in hidden layer %d\n", neuronID, newNeuronID, layerIdx+1)
                 break
             }
             break
         }
     }
+
+    return nil
 }
 
 
-func MutateBiases(config *NetworkConfig, mutationRate int, learningRate float64) {
-    if mutationRate <= 0 {
-        return
+
+func MutateBiases(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 3 {
+        return fmt.Errorf("insufficient arguments for MutateBiases")
     }
 
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Typecast the third argument to float64 for learningRate
+    learningRate, ok := args[2].(float64)
+    if !ok {
+        return fmt.Errorf("invalid type for learningRate")
+    }
+
+    if mutationRate <= 0 {
+        return nil
+    }
+
+    // Mutate biases in hidden layers
     for _, layer := range config.Layers.Hidden {
         for neuronID, neuron := range layer.Neurons {
             if rand.Intn(100) < mutationRate {
                 neuron.Bias += rand.NormFloat64() * learningRate
                 layer.Neurons[neuronID] = neuron
-               //  fmt.Printf("Mutated bias of neuron %s to %.4f\n", neuronID, neuron.Bias)
             }
         }
     }
 
+    // Mutate biases in output layer
     for neuronID, neuron := range config.Layers.Output.Neurons {
         if rand.Intn(100) < mutationRate {
             neuron.Bias += rand.NormFloat64() * learningRate
             config.Layers.Output.Neurons[neuronID] = neuron
-           //  fmt.Printf("Mutated bias of output neuron %s to %.4f\n", neuronID, neuron.Bias)
         }
     }
+
+    return nil
 }
 
-func RandomizeWeights(config *NetworkConfig, mutationRate int) {
-    if mutationRate <= 0 {
-        return
+
+func RandomizeWeights(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for RandomizeWeights")
     }
 
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    if mutationRate <= 0 {
+        return nil
+    }
+
+    // Randomize weights in hidden layers
     for _, layer := range config.Layers.Hidden {
         for neuronID, neuron := range layer.Neurons {
             for connID := range neuron.Connections {
                 if rand.Intn(100) < mutationRate {
                     neuron.Connections[connID] = Connection{Weight: rand.NormFloat64()}
-                   //  fmt.Printf("Randomized weight of connection %s for neuron %s\n", connID, neuronID)
                 }
             }
             layer.Neurons[neuronID] = neuron
         }
     }
 
+    // Randomize weights in output layer
     for neuronID, neuron := range config.Layers.Output.Neurons {
         for connID := range neuron.Connections {
             if rand.Intn(100) < mutationRate {
                 neuron.Connections[connID] = Connection{Weight: rand.NormFloat64()}
-               //  fmt.Printf("Randomized weight of connection %s for output neuron %s\n", connID, neuronID)
             }
         }
         config.Layers.Output.Neurons[neuronID] = neuron
     }
+
+    return nil
 }
 
 
-func SplitNeuron(config *NetworkConfig, mutationRate int) {
-    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
-        return
+
+func SplitNeuron(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for SplitNeuron")
     }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    if len(config.Layers.Hidden) == 0 || mutationRate <= 0 {
+        return nil
+    }
+
     for layerIdx := range config.Layers.Hidden {
         if rand.Intn(100) < mutationRate {
             for neuronID, neuron := range config.Layers.Hidden[layerIdx].Neurons {
@@ -981,29 +1173,45 @@ func SplitNeuron(config *NetworkConfig, mutationRate int) {
                 config.Layers.Hidden[layerIdx].Neurons[neuronID+"_split1"] = newNeuron1
                 config.Layers.Hidden[layerIdx].Neurons[neuronID+"_split2"] = newNeuron2
 
-               //  fmt.Printf("Split neuron %s into %s_split1 and %s_split2\n", neuronID, neuronID, neuronID)
+                // Remove the original neuron
                 delete(config.Layers.Hidden[layerIdx].Neurons, neuronID)
                 break
             }
             break
         }
     }
+
+    return nil
 }
 
 
+func SwapLayerActivations(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for SwapLayerActivations")
+    }
 
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
 
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
 
-func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate && len(config.Layers.Hidden) > 1 {
         // Randomly select two layers to swap activations
         idx1 := rand.Intn(len(config.Layers.Hidden))
         idx2 := rand.Intn(len(config.Layers.Hidden))
-        
+
         if idx1 != idx2 {
             layer1 := config.Layers.Hidden[idx1]
             layer2 := config.Layers.Hidden[idx2]
-            
+
             // Ensure both layers are of type "dense" and have neurons
             if layer1.LayerType == "dense" && layer2.LayerType == "dense" && layer1.Neurons != nil && layer2.Neurons != nil {
                 for neuronID, neuron1 := range layer1.Neurons {
@@ -1015,27 +1223,49 @@ func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
                         // Skip if connections are nil
                         continue
                     }
+                    // Swap the activation types
                     neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
                     layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
                 }
             }
         }
     }
+
+    return nil
 }
 
 
 
 
-func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
-    //for layerIdx, layer := range config.Layers.Hidden {
+
+func ShuffleLayerConnections(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for ShuffleLayerConnections")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Loop through each hidden layer
     for _, layer := range config.Layers.Hidden {
         if rand.Intn(100) < mutationRate {
             neuronIDs := make([]string, 0, len(layer.Neurons))
             for neuronID := range layer.Neurons {
                 neuronIDs = append(neuronIDs, neuronID)
             }
+            // Shuffle the neuron IDs
             rand.Shuffle(len(neuronIDs), func(i, j int) { neuronIDs[i], neuronIDs[j] = neuronIDs[j], neuronIDs[i] })
-            
+
             // Shuffle the connections by copying and reassigning modified neurons
             for i, neuronID := range neuronIDs {
                 neuron := layer.Neurons[neuronID] // Get the neuron struct from the map
@@ -1043,11 +1273,12 @@ func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
                 neuron.Connections = shuffledNeuron.Connections // Assign shuffled connections
                 layer.Neurons[neuronID] = neuron // Put the modified neuron back into the map
             }
-            
-           //  fmt.Printf("Shuffled connections in layer %d\n", layerIdx+1)
         }
     }
+
+    return nil
 }
+
 
 
 

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"time"
+	"path/filepath"
 )
 
 // AIModelManager manages the lifecycle and growth of AI models.
@@ -124,6 +125,123 @@ func (mgr *AIModelManager) initialize() {
 
 	fmt.Println("Initialization complete. Neural network configuration created.")
 	fmt.Printf("Model will be saved at: %s\n", mgr.ModelLocation)
+}
+
+func (mgr *AIModelManager) CreateFirstGeneration(generationFolder string) {
+    learningRate := 0.01
+    mutationRate := 20 // Example mutation rate
+
+    for i := 0; i < mgr.NumModels; i++ {
+        modelName := fmt.Sprintf("model-%d", i+1)
+
+        // Create a random network configuration based on the input and output sizes
+        networkConfig := CreateRandomNetworkConfig(mgr.InputSize, mgr.OutputSize, mgr.OutputTypes, modelName, mgr.ProjectName)
+
+        // Adjust the network configuration based on the layer types
+        for _, layerType := range mgr.LayerTypes {
+            switch layerType {
+            case "FFNN":
+                fmt.Println("Adding FFNN layer to the model...")
+                AddFFNNLayer(networkConfig)
+            case "LSTM":
+                fmt.Println("Adding LSTM layer to the model...")
+                AddLSTMLayer(networkConfig)
+            case "CNN":
+                fmt.Println("Adding CNN layer to the model...")
+                AddCNNLayer(networkConfig)
+            default:
+                fmt.Printf("Unknown layer type: %s\n", layerType)
+            }
+        }
+
+        // Apply all mutations for FFNN, LSTM, CNN
+        mgr.ApplyAllMutations(networkConfig, learningRate, mutationRate)
+
+        // Save the model to the generation folder
+        filePath := filepath.Join(generationFolder, fmt.Sprintf("%s.json", modelName))
+        err := SaveNetworkConfig(networkConfig, filePath)
+        if err != nil {
+            fmt.Printf("Error saving model %s: %v\n", modelName, err)
+        } else {
+            fmt.Printf("Model %s saved to %s\n", modelName, filePath)
+        }
+    }
+}
+
+// Apply all available mutations for FFNN, CNN, and LSTM
+func (mgr *AIModelManager) ApplyAllMutations(networkConfig *NetworkConfig, learningRate float64, mutationRate int) {
+    // Apply FFNN mutations
+    for _, mutationFunc := range LSTffnnMutations {
+        fmt.Println("Applying FFNN mutations...")
+        mutationFunc(networkConfig, learningRate, mutationRate)
+    }
+
+    // Apply LSTM mutations
+    for _, mutationFunc := range LSTlstmMutations {
+        fmt.Println("Applying LSTM mutations...")
+        mutationFunc(networkConfig, learningRate, mutationRate)
+    }
+
+    // Apply CNN mutations
+    for _, mutationFunc := range LSTcnnMutations {
+        fmt.Println("Applying CNN mutations...")
+        mutationFunc(networkConfig, learningRate, mutationRate)
+    }
+}
+
+
+// ApplyMutations applies all mutations to the given network config.
+func (mgr *AIModelManager) ApplyMutations(modelID int, learningRate float64, mutationRate int) {
+	fmt.Printf("Applying mutations to model %d...\n", modelID)
+
+	// Loop through all mutation functions based on the layer types.
+	for _, layerType := range mgr.LayerTypes {
+		switch layerType {
+		case "FFNN":
+			for mutationName, mutationFunc := range LSTffnnMutations {
+				fmt.Printf("Applying %s mutation to model %d...\n", mutationName, modelID)
+				err := mutationFunc(mgr.Config, learningRate, mutationRate)
+				if err != nil {
+					fmt.Printf("Error applying %s mutation: %v\n", mutationName, err)
+				}
+			}
+		case "LSTM":
+			for mutationName, mutationFunc := range LSTlstmMutations {
+				fmt.Printf("Applying %s mutation to model %d...\n", mutationName, modelID)
+				err := mutationFunc(mgr.Config, learningRate, mutationRate)
+				if err != nil {
+					fmt.Printf("Error applying %s mutation: %v\n", mutationName, err)
+				}
+			}
+		case "CNN":
+			for mutationName, mutationFunc := range LSTcnnMutations {
+				fmt.Printf("Applying %s mutation to model %d...\n", mutationName, modelID)
+				err := mutationFunc(mgr.Config, learningRate, mutationRate)
+				if err != nil {
+					fmt.Printf("Error applying %s mutation: %v\n", mutationName, err)
+				}
+			}
+		}
+	}
+}
+
+
+// SaveModel saves the network configuration as a JSON file.
+func (mgr *AIModelManager) SaveModel(generationFolder string, networkConfig *NetworkConfig, modelID int) {
+	fileName := filepath.Join(generationFolder, fmt.Sprintf("model_%d.json", modelID))
+	data, err := json.MarshalIndent(networkConfig, "", "  ")
+	if err != nil {
+		fmt.Printf("Failed to marshal model %d: %v\n", modelID, err)
+		return
+	}
+
+	err = os.WriteFile(fileName, data, 0644)
+	if err != nil {
+		fmt.Printf("Failed to save model %d: %v\n", modelID, err)
+		return
+	}
+
+	fmt.Printf("Model %d saved successfully to %s\n", modelID, fileName)
 }
 
 /*

@@ -1,9 +1,57 @@
 package dense
 
-import "math/rand"
+import (
+    "math/rand"
+    "fmt"
+)
 
 
-func MutateLSTMWeights(config *NetworkConfig, learningRate float64, mutationRate int) {
+
+func AddLSTMLayer(config *NetworkConfig) error {
+    newLayer := Layer{
+        LayerType: "lstm",
+        LSTMCells: []LSTMCell{
+            {
+                InputWeights:  RandomSlice(10),
+                ForgetWeights: RandomSlice(10),
+                OutputWeights: RandomSlice(10),
+                CellWeights:   RandomSlice(10),
+                Bias:          rand.Float64(),
+            },
+        },
+    }
+
+    // Append the new LSTM layer
+    config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+    return nil
+}
+
+
+func MutateLSTMWeights(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 3 {
+        return fmt.Errorf("insufficient arguments for MutateLSTMWeights")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to float64 for learningRate
+    learningRate, ok := args[1].(float64)
+    if !ok {
+        return fmt.Errorf("invalid type for learningRate")
+    }
+
+    // Typecast the third argument to int for mutationRate
+    mutationRate, ok := args[2].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Iterate through LSTM layers and mutate weights
     for _, layer := range config.Layers.Hidden {
         if layer.LayerType == "lstm" {
             for i := range layer.LSTMCells {
@@ -24,9 +72,36 @@ func MutateLSTMWeights(config *NetworkConfig, learningRate float64, mutationRate
             }
         }
     }
+
+    return nil
 }
 
-func MutateLSTMBiases(config *NetworkConfig, mutationRate int, learningRate float64) {
+
+func MutateLSTMBiases(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 3 {
+        return fmt.Errorf("insufficient arguments for MutateLSTMBiases")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Typecast the third argument to float64 for learningRate
+    learningRate, ok := args[2].(float64)
+    if !ok {
+        return fmt.Errorf("invalid type for learningRate")
+    }
+
+    // Iterate through LSTM layers and mutate biases
     for _, layer := range config.Layers.Hidden {
         if layer.LayerType == "lstm" {
             for i := range layer.LSTMCells {
@@ -36,10 +111,31 @@ func MutateLSTMBiases(config *NetworkConfig, mutationRate int, learningRate floa
             }
         }
     }
+
+    return nil
 }
 
 
-func RandomizeLSTMWeights(config *NetworkConfig, mutationRate int) {
+
+func RandomizeLSTMWeights(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for RandomizeLSTMWeights")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Iterate through LSTM layers and randomize weights
     for _, layer := range config.Layers.Hidden {
         if layer.LayerType == "lstm" {
             for i := range layer.LSTMCells {
@@ -52,9 +148,30 @@ func RandomizeLSTMWeights(config *NetworkConfig, mutationRate int) {
             }
         }
     }
+
+    return nil
 }
 
-func InvertLSTMWeights(config *NetworkConfig, mutationRate int) {
+
+func InvertLSTMWeights(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for InvertLSTMWeights")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
+    // Iterate through LSTM layers and invert weights
     for _, layer := range config.Layers.Hidden {
         if layer.LayerType == "lstm" {
             for i := range layer.LSTMCells {
@@ -75,9 +192,28 @@ func InvertLSTMWeights(config *NetworkConfig, mutationRate int) {
             }
         }
     }
+
+    return nil
 }
 
-func AddLSTMLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
+func AddLSTMLayerAtRandomPosition(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for AddLSTMLayerAtRandomPosition")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if rand.Intn(100) < mutationRate {
         newLayer := Layer{
             LayerType: "lstm",
@@ -96,13 +232,32 @@ func AddLSTMLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
         pos := rand.Intn(len(config.Layers.Hidden) + 1)
         config.Layers.Hidden = append(config.Layers.Hidden[:pos], append([]Layer{newLayer}, config.Layers.Hidden[pos:]...)...)
     }
+
+    return nil
 }
 
 
-// MutateLSTMCells mutates the weights and biases of LSTM cells based on the mutation rate
-func MutateLSTMCells(config *NetworkConfig, mutationRate int) {
+
+func MutateLSTMCells(args ...interface{}) error {
+    // Check for sufficient arguments
+    if len(args) < 2 {
+        return fmt.Errorf("insufficient arguments for MutateLSTMCells")
+    }
+
+    // Typecast the first argument to *NetworkConfig
+    config, ok := args[0].(*NetworkConfig)
+    if !ok {
+        return fmt.Errorf("invalid type for NetworkConfig")
+    }
+
+    // Typecast the second argument to int for mutationRate
+    mutationRate, ok := args[1].(int)
+    if !ok {
+        return fmt.Errorf("invalid type for mutationRate")
+    }
+
     if mutationRate <= 0 {
-        return
+        return nil
     }
 
     // Loop through all layers
@@ -132,7 +287,7 @@ func MutateLSTMCells(config *NetworkConfig, mutationRate int) {
                         cell.CellWeights[j] += rand.NormFloat64()
                     }
                 }
-                
+
                 // Mutate the biases
                 if rand.Intn(100) < mutationRate {
                     cell.Bias += rand.NormFloat64()
@@ -143,4 +298,6 @@ func MutateLSTMCells(config *NetworkConfig, mutationRate int) {
             }
         }
     }
+
+    return nil
 }

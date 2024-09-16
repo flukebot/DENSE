@@ -100,3 +100,9 @@ func CreateDirectory(path string) error {
 	}
 	return nil
 }
+
+
+// Alias for SaveNetworkToFile to match the expected function signature
+func SaveNetworkConfig(config *NetworkConfig, filename string) error {
+    return SaveNetworkToFile(config, filename)
+}
