@@ -4,6 +4,7 @@ import (
 	"dense"
 	"fmt"
 	"path/filepath"
+	"sort"
 )
 
 func main() {
@@ -18,6 +19,7 @@ func main() {
 	numModels := 100                     // Number of models to create and test
 	cycleAllMutations := true          // Flag to cycle through all mutations
 	topX := 3                          // Number of top models to track
+	numGenerations := 5                // Number of generations to run the hill climb
 
 	// Load file path for project state
 	loadFilePath := filepath.Join(modelLocation, projectName+"_save_state.json")
@@ -33,13 +35,9 @@ func main() {
 	manager := &dense.AIModelManager{}
 	manager.Init(projectName, inputSize, outputSize, outputTypes, modelLocation, methods, layerTypes, numModels, cycleAllMutations, topX, loadFilePath)
 
-	// Step 4: Create the first generation of models and save them
-	generationFolder := filepath.Join(modelLocation, "0")
-	err = dense.CreateDirectory(generationFolder)
-	if err != nil {
-		fmt.Printf("Error creating generation folder: %v\n", err)
-		return
-	}
+	// Check which generation to resume from
+	startGeneration := manager.History.CurrentGeneration
+	fmt.Printf("Resuming from generation %d...\n", startGeneration)
 
 	// Step 5: Load the MNIST dataset (downloading if necessary)
 	err = dense.EnsureMNISTDownloads()
@@ -56,11 +54,57 @@ func main() {
 	// Split the MNIST data into training and testing sets
 	_, testData := splitData(mnist)
 
-	// Step 6: Create the first generation of models
-	manager.CreateFirstGeneration(generationFolder)
-	fmt.Println("First generation of models created.")
+	// Step 6: Run the hill-climbing algorithm across multiple generations
+	for generation := startGeneration; generation < numGenerations; generation++ {
+		fmt.Printf("Running generation %d...\n", generation)
+		generationFolder := filepath.Join(modelLocation, fmt.Sprintf("%d", generation))
 
-	// Step 7: Evaluate each model after applying mutations and report accuracy
+		// Create the first generation of models if it's the first run
+		if generation == 0 {
+			err := dense.CreateDirectory(generationFolder)
+			if err != nil {
+				fmt.Printf("Error creating generation folder: %v\n", err)
+				return
+			}
+
+			// Create the first generation of models
+			manager.CreateFirstGeneration(generationFolder)
+			fmt.Println("First generation of models created.")
+		}
+
+		// Step 7: Evaluate each model and rank them by accuracy
+		modelScores := evaluateAndRankModels(manager, generationFolder, numModels, testData)
+
+		// Step 8: Select the top X models and mutate them to create the next generation
+		if generation < numGenerations-1 {
+			nextGenerationFolder := filepath.Join(modelLocation, fmt.Sprintf("%d", generation+1))
+			err := dense.CreateDirectory(nextGenerationFolder)
+			if err != nil {
+				fmt.Printf("Error creating next generation folder: %v\n", err)
+				return
+			}
+
+			createNextGeneration(manager, modelScores, nextGenerationFolder)
+		}
+
+		// Save the current generation number
+		manager.History.CurrentGeneration = generation + 1
+		err = manager.SaveProjectState()
+		if err != nil {
+			fmt.Printf("Error saving project state: %v\n", err)
+		} else {
+			fmt.Println("Project state saved successfully.")
+		}
+	}
+
+	fmt.Println("Hill climbing optimization completed.")
+}
+
+// evaluateAndRankModels evaluates the fitness of each model and returns them sorted by accuracy
+func evaluateAndRankModels(manager *dense.AIModelManager, generationFolder string, numModels int, testData *dense.MNISTData) []dense.ModelData {
+	var modelScores []dense.ModelData
+
+	// Evaluate each model
 	for i := 0; i < numModels; i++ {
 		modelFile := filepath.Join(generationFolder, fmt.Sprintf("model-%d.json", i+1))
 		config, err := dense.LoadNetworkFromFile(modelFile)
@@ -69,35 +113,57 @@ func main() {
 			continue
 		}
 
-		// Apply mutations to the models before testing
-		learningRate := 0.01
-		mutationRate := 20
-		manager.ApplyAllMutations(config, learningRate, mutationRate)
-
 		// Evaluate the fitness of the model on the test dataset
 		fitness := evaluateFitness(config, testData)
 		fmt.Printf("Model %d accuracy: %.4f%%\n", i+1, fitness*100)
 
-		// Save the mutated model
-		mutatedModelFile := filepath.Join(generationFolder, fmt.Sprintf("mutated-model-%d.json", i+1))
-		err = dense.SaveNetworkConfig(config, mutatedModelFile)
-		if err != nil {
-			fmt.Printf("Error saving mutated model %d: %v\n", i+1, err)
-		} else {
-			fmt.Printf("Mutated model %d saved to %s\n", i+1, mutatedModelFile)
-		}
+		// Append the model data with fitness score
+		modelScores = append(modelScores, dense.ModelData{
+			ModelName: fmt.Sprintf("model-%d", i+1),
+			Accuracy:  fitness,
+		})
 	}
 
-	// Step 8: Save the current project state
-	err = manager.SaveProjectState()
-	if err != nil {
-		fmt.Printf("Error saving project state: %v\n", err)
-	} else {
-		fmt.Println("Project state saved successfully.")
-	}
+	// Sort models by accuracy in descending order
+	sort.Slice(modelScores, func(i, j int) bool {
+		return modelScores[i].Accuracy > modelScores[j].Accuracy
+	})
 
-	fmt.Println("All models evaluated and mutated versions saved.")
+	return modelScores
 }
+
+// createNextGeneration creates the next generation of models by mutating the top models
+func createNextGeneration(manager *dense.AIModelManager, modelScores []dense.ModelData, nextGenerationFolder string) {
+    topX := manager.TopX
+    learningRate := 0.01
+    mutationRate := 20
+
+    // Select the top X models and mutate them
+    for i := 0; i < topX; i++ {
+        modelName := modelScores[i].ModelName
+
+        // Load the model configuration
+        config, err := dense.LoadNetworkFromFile(filepath.Join(nextGenerationFolder, modelName+".json"))
+        if err != nil {
+            fmt.Printf("Error loading model %s: %v\n", modelName, err)
+            continue
+        }
+
+        // Mutate the model
+        manager.ApplyAllMutations(config, learningRate, mutationRate)
+
+        // Save the mutated model to the next generation
+        mutatedModelFile := filepath.Join(nextGenerationFolder, fmt.Sprintf("mutated-%s.json", modelName))
+        err = dense.SaveNetworkConfig(config, mutatedModelFile)
+        if err != nil {
+            fmt.Printf("Error saving mutated model %s: %v\n", modelName, err)
+        } else {
+            fmt.Printf("Mutated model %s saved to %s\n", modelName, mutatedModelFile)
+        }
+    }
+}
+
+
 
 // Function to split the MNIST data into training (80%) and testing (20%)
 func splitData(mnist *dense.MNISTData) (trainData, testData *dense.MNISTData) {

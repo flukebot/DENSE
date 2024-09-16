@@ -48,6 +48,7 @@ type ProjectHistory struct {
 	History         []GenerationData `json:"history"`
 	TotalGenerations int             `json:"total_generations"`
 	ModelConfig     *NetworkConfig   `json:"model_config"` // Store the latest network configuration
+	CurrentGeneration int              `json:"current_generation"` // Add this field to track the generation
 }
 
 // Init initializes the manager with the project-specific parameters or loads from a save point.
@@ -80,6 +81,9 @@ func (mgr *AIModelManager) Init(projectName string, inputSize int, outputSize in
 		// If no save file is passed, initialize a new project
 		mgr.initialize()
 	}
+
+	// Initialize the current generation
+    mgr.History.CurrentGeneration = 0
 }
 
 // initialize creates the neural network configuration dynamically based on the provided layer types.
