@@ -364,7 +364,7 @@ func (mgr *AIModelManager) exportHistory() error {
 }
 
 // saveProjectState saves the current state of the project, including model configuration and history.
-func (mgr *AIModelManager) saveProjectState() error {
+func (mgr *AIModelManager) SaveProjectState() error {
 	mgr.History.ModelConfig = mgr.Config // Save the current network configuration
 
 	filePath := fmt.Sprintf("%s_save_state.json", mgr.ProjectName)

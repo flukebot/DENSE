@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 )
 
-// Entry point of the program
 func main() {
 	// Step 1: Define project parameters for MNIST dataset and AI model testing
 	projectName := "AIModelTestProject"
@@ -19,7 +18,9 @@ func main() {
 	numModels := 100                     // Number of models to create and test
 	cycleAllMutations := true          // Flag to cycle through all mutations
 	topX := 3                          // Number of top models to track
-	loadFilePath := ""                 // Load from file if needed
+
+	// Load file path for project state
+	loadFilePath := filepath.Join(modelLocation, projectName+"_save_state.json")
 
 	// Step 2: Create the models folder if it doesn't exist
 	err := dense.CreateDirectory(modelLocation)
@@ -28,7 +29,7 @@ func main() {
 		return
 	}
 
-	// Step 3: Initialize the AIModelManager
+	// Step 3: Initialize the AIModelManager (either load from saved state or create new)
 	manager := &dense.AIModelManager{}
 	manager.Init(projectName, inputSize, outputSize, outputTypes, modelLocation, methods, layerTypes, numModels, cycleAllMutations, topX, loadFilePath)
 
@@ -85,6 +86,14 @@ func main() {
 		} else {
 			fmt.Printf("Mutated model %d saved to %s\n", i+1, mutatedModelFile)
 		}
+	}
+
+	// Step 8: Save the current project state
+	err = manager.SaveProjectState()
+	if err != nil {
+		fmt.Printf("Error saving project state: %v\n", err)
+	} else {
+		fmt.Println("Project state saved successfully.")
 	}
 
 	fmt.Println("All models evaluated and mutated versions saved.")
