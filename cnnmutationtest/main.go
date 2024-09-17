@@ -393,21 +393,34 @@ func processModel(modelFilePath, mnistDataFilePath string, percentageTrain float
 }
 
 
-// Apply a random mutation to a model
+// Apply a random number of mutations to a model
 func applyRandomMutation(config *dense.NetworkConfig) {
-	mutations := []func(*dense.NetworkConfig){
-		func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.01, 20) },
-		func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 20, 0.01) },
-		func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
-		func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 20) },
-		func(c *dense.NetworkConfig) { dense.AddCNNLayerAtRandomPosition(c, 20) },
-	}
+    mutations := []func(*dense.NetworkConfig){
+        func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.1, 40) },
+        func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 40, 0.1) },
+        func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
+        func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 40) },
+        func(c *dense.NetworkConfig) { dense.AddCNNLayerAtRandomPosition(c, 40) },
+        func(c *dense.NetworkConfig) { dense.MutateCNNFilterSize(c, 40) },           // Add mutation to CNN filter size
+        func(c *dense.NetworkConfig) { dense.MutateCNNStrideAndPadding(c, 40) },     // Add mutation to CNN stride and padding
+        func(c *dense.NetworkConfig) { dense.DuplicateCNNLayer(c, 40) },             // Add mutation to duplicate CNN layers
+        func(c *dense.NetworkConfig) { dense.AddMultipleCNNLayers(c, 40, 5) },       // Add multiple CNN layers
+    }
 
-	// Select a random mutation and apply it
-	rand.Seed(time.Now().UnixNano())
-	mutation := mutations[rand.Intn(len(mutations))]
-	mutation(config)
+    // Select a random number of mutations between 1 and 30
+    rand.Seed(time.Now().UnixNano())
+    numMutations := rand.Intn(30) + 1 // Random number from 1 to 30
+
+    // Apply the random number of mutations
+    for i := 0; i < numMutations; i++ {
+        mutation := mutations[rand.Intn(len(mutations))] // Randomly select a mutation
+        mutation(config)
+    }
+
+    fmt.Printf("Applied %d mutations to the model.\n", numMutations)
 }
+
+
 
 // Load a model from a file
 func loadModel(filePath string) (*dense.NetworkConfig, error) {
