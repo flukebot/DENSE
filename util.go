@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"fmt"
 	//"syscall/js"
+	"crypto/md5"
+	"encoding/hex"
 )
 
 
@@ -105,4 +107,18 @@ func CreateDirectory(path string) error {
 // Alias for SaveNetworkToFile to match the expected function signature
 func SaveNetworkConfig(config *NetworkConfig, filename string) error {
     return SaveNetworkToFile(config, filename)
+}
+
+
+// Function to compute MD5 hash of a JSON serialized object
+func computeMD5Hash(v interface{}) (string, error) {
+	// Convert the model configuration to a JSON string
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize object to JSON: %v", err)
+	}
+
+	// Compute MD5 hash
+	hash := md5.Sum(jsonBytes)
+	return hex.EncodeToString(hash[:]), nil
 }

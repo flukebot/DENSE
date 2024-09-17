@@ -172,8 +172,73 @@ func (mgr *AIModelManager) CreateFirstGeneration(generationFolder string) {
     }
 }
 
+
+// Usage example in your generation loop
+func (mgr *AIModelManager) ApplyMutationsToNextGeneration(networkConfig *NetworkConfig, learningRate float64, mutationRate int) {
+    // Calculate the MD5 hash before mutations
+    beforeHash, err := computeMD5Hash(networkConfig)
+    if err != nil {
+        fmt.Printf("Error computing MD5 hash before mutation: %v\n", err)
+        return
+    }
+    fmt.Printf("MD5 before mutation: %s\n", beforeHash)
+
+    // Apply a random mutation
+    mgr.ApplyRandomMutation(networkConfig, learningRate, mutationRate)
+
+    // Calculate the MD5 hash after mutations
+    afterHash, err := computeMD5Hash(networkConfig)
+    if err != nil {
+        fmt.Printf("Error computing MD5 hash after mutation: %v\n", err)
+        return
+    }
+    fmt.Printf("MD5 after mutation: %s\n", afterHash)
+
+    // Check if the model has changed
+    if beforeHash == afterHash {
+        fmt.Println("No changes in the model after mutation.")
+    } else {
+        fmt.Println("Model has changed after mutation.")
+    }
+}
+
+// ApplyRandomMutation selects and applies a random mutation from FFNN, LSTM, or CNN mutations
+func (mgr *AIModelManager) ApplyRandomMutation(networkConfig *NetworkConfig, learningRate float64, mutationRate int) {
+    // Collect all available mutation sets into a single slice
+    var mutationSets []map[string]MutationFunc
+    mutationSets = append(mutationSets, LSTffnnMutations, LSTlstmMutations, LSTcnnMutations)
+
+    // Randomly choose one mutation set
+    rand.Seed(time.Now().UnixNano())
+    chosenSet := mutationSets[rand.Intn(len(mutationSets))]
+
+    // Randomly choose a mutation from the chosen set
+    mutationNames := make([]string, 0, len(chosenSet))
+    for mutationName := range chosenSet {
+        mutationNames = append(mutationNames, mutationName)
+    }
+
+    chosenMutationName := mutationNames[rand.Intn(len(mutationNames))]
+    chosenMutation := chosenSet[chosenMutationName]
+
+    fmt.Printf("Applying random mutation: %s\n", chosenMutationName)
+    err := chosenMutation(networkConfig, learningRate, mutationRate)
+    if err != nil {
+        fmt.Printf("Error applying mutation %s: %v\n", chosenMutationName, err)
+    }
+}
+
+
 // Apply all available mutations for FFNN, CNN, and LSTM
 func (mgr *AIModelManager) ApplyAllMutations(networkConfig *NetworkConfig, learningRate float64, mutationRate int) {
+    // Calculate the MD5 hash before mutations
+    beforeHash, err := computeMD5Hash(networkConfig)
+    if err != nil {
+        fmt.Printf("Error computing MD5 hash before mutation: %v\n", err)
+        return
+    }
+    fmt.Printf("MD5 before mutation: %s\n", beforeHash)
+
     // Apply FFNN mutations
     for _, mutationFunc := range LSTffnnMutations {
         fmt.Println("Applying FFNN mutations...")
@@ -190,6 +255,21 @@ func (mgr *AIModelManager) ApplyAllMutations(networkConfig *NetworkConfig, learn
     for _, mutationFunc := range LSTcnnMutations {
         fmt.Println("Applying CNN mutations...")
         mutationFunc(networkConfig, learningRate, mutationRate)
+    }
+
+    // Calculate the MD5 hash after mutations
+    afterHash, err := computeMD5Hash(networkConfig)
+    if err != nil {
+        fmt.Printf("Error computing MD5 hash after mutation: %v\n", err)
+        return
+    }
+    fmt.Printf("MD5 after mutation: %s\n", afterHash)
+
+    // Check if the model has changed
+    if beforeHash == afterHash {
+        fmt.Println("No changes in the model after mutation.")
+    } else {
+        fmt.Println("Model has changed after mutation.")
     }
 }
 
