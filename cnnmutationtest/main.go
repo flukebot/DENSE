@@ -298,7 +298,7 @@ func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []stri
 
 //step 4 randomly mutate ---------------
 // MutateAllModelsRandomly mutates all models inside the given generation directory.
-// If `useGoroutines` is true, it will process each model on a separate goroutine (thread).
+// If `useGoroutines` is true, it will process each model in batches of 10 with concurrent goroutines.
 func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, outputTypes []string, projectName string, mnistDataFilePath string, percentageTrain float64, useGoroutines bool) error {
 	// Targeting the `generationDir` folder
 	files, err := ioutil.ReadDir(generationDir)
@@ -306,34 +306,52 @@ func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, ou
 		return fmt.Errorf("failed to read models directory: %w", err)
 	}
 
-	// WaitGroup to track goroutines if used
+	totalFiles := len(files)
+	batchSize := 10 // Number of models to process concurrently
+	batchCount := (totalFiles / batchSize) + 1
+
 	var wg sync.WaitGroup
 
-	for _, file := range files {
-		if filepath.Ext(file.Name()) == ".json" {
-			modelFilePath := filepath.Join(generationDir, file.Name())
+	for batchIndex := 0; batchIndex < batchCount; batchIndex++ {
+		// Create a batch of files to process
+		startIndex := batchIndex * batchSize
+		endIndex := startIndex + batchSize
+		if endIndex > totalFiles {
+			endIndex = totalFiles
+		}
+		batchFiles := files[startIndex:endIndex]
 
-			// If goroutines are enabled, process each file in a separate thread
-			if useGoroutines {
-				wg.Add(1)
-				go func(modelFilePath string) {
-					defer wg.Done()
+		// Process the current batch
+		for _, file := range batchFiles {
+			if filepath.Ext(file.Name()) == ".json" {
+				modelFilePath := filepath.Join(generationDir, file.Name())
+
+				// If goroutines are enabled, process each file in a separate thread
+				if useGoroutines {
+					wg.Add(1)
+					go func(modelFilePath string) {
+						defer wg.Done()
+						if err := processModel(modelFilePath, mnistDataFilePath, percentageTrain); err != nil {
+							log.Printf("Error processing model %s: %v", modelFilePath, err)
+						}
+					}(modelFilePath)
+				} else {
+					// Process files sequentially without goroutines
 					if err := processModel(modelFilePath, mnistDataFilePath, percentageTrain); err != nil {
 						log.Printf("Error processing model %s: %v", modelFilePath, err)
 					}
-				}(modelFilePath)
-			} else {
-				// Process files sequentially without goroutines
-				if err := processModel(modelFilePath, mnistDataFilePath, percentageTrain); err != nil {
-					log.Printf("Error processing model %s: %v", modelFilePath, err)
 				}
 			}
 		}
-	}
 
-	// Wait for all goroutines to complete if used
-	if useGoroutines {
-		wg.Wait()
+		// Wait for all goroutines in the batch to complete
+		if useGoroutines {
+			wg.Wait()
+		}
+
+		// Calculate and print progress percentage
+		progress := float64(endIndex) / float64(totalFiles) * 100
+		fmt.Printf("Batch %d/%d processed, %.2f%% complete.\n", batchIndex+1, batchCount, progress)
 	}
 
 	return nil
