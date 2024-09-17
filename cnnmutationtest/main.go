@@ -2,12 +2,358 @@ package main
 
 import (
 	"dense"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 )
 
+// MNISTImageData represents the structure of each entry in mnistData.json
+type MNISTImageData struct {
+	FileName string `json:"file_name"`
+	Label    int    `json:"label"`
+}
+
 func main() {
+	fmt.Println("Starting CNN train and host")
+
+	// Check if the MNIST directory exists, and run setup if it doesn't
+	mnistDir := "./host/MNIST"
+	if !dense.CheckDirExists(mnistDir) {
+		fmt.Println("MNIST directory doesn't exist, running setupMNIST()")
+		setupMNIST()
+	} else {
+		fmt.Println("MNIST directory already exists, skipping setup.")
+	}
+
+	// Set up the model configuration
+	projectName := "AIModelTestProject"
+	inputSize := 28 * 28   // Input size for MNIST data
+	outputSize := 10       // Output size for MNIST digits (0-9)
+	outputTypes := []string{"softmax"} // Activation type for output layer
+	mnistDataFilePath := "./host/mnistData.json"
+	percentageTrain := 0.8
+	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
+
+
+	
+	// Define the path to the MNIST data JSON file
+	jsonFilePath := "./host/mnistData.json"
+
+	// Train and evaluate the model using 80% of the data for training
+	accuracy, err := EvaluateModel(jsonFilePath, modelConfig, 0.8)
+	if err != nil {
+		log.Fatalf("Failed to train and evaluate model: %v", err)
+	}
+
+	// Display the model accuracy
+	fmt.Printf("Model accuracy: %.2f%%\n", accuracy*100)*/
+
+
+	// Check if the generation folder exists, and generate models if it doesn't
+	generationDir := "./host/generations/0"
+	if !dense.CheckDirExists(generationDir) {
+		fmt.Println("Generation folder doesn't exist, generating models.")
+		// Number of models to generate
+		numModels := 100
+
+		// Generate the models and save them to host/generations/0
+		if err := GenerateModels(numModels, inputSize, outputSize, outputTypes, projectName); err != nil {
+			log.Fatalf("Failed to generate models: %v", err)
+		}
+		fmt.Println("Model generation complete.")
+	} else {
+		fmt.Println("Generation folder already exists, skipping model generation.")
+	}
+
+	// Call the mutate function to mutate models inside ./host/generations/0
+	err := MutateAllModelsRandomly(generationDir,inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain)
+	if err != nil {
+		log.Fatalf("Error mutating models: %v", err)
+	}
+	fmt.Println("All models have been mutated, evaluated, and saved.")
+}
+
+
+//step 1-----------------------------
+
+// LoadMNISTData loads the MNIST data from the JSON file and returns an array of MNISTImageData
+func LoadMNISTData(jsonFilePath string) ([]MNISTImageData, error) {
+	jsonFile, err := os.Open(jsonFilePath)
+	if err != nil {
+		return nil, err
+	}
+	defer jsonFile.Close()
+
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return nil, err
+	}
+
+	var mnistData []MNISTImageData
+	err = json.Unmarshal(byteValue, &mnistData)
+	if err != nil {
+		return nil, err
+	}
+
+	return mnistData, nil
+}
+
+
+func setupMNIST(){
+	// Create the directory for MNIST images
+	if err := os.MkdirAll("./host/MNIST", os.ModePerm); err != nil {
+		log.Fatalf("Failed to create MNIST directory: %v", err)
+	}
+
+	// Ensure MNIST data is downloaded and unzipped
+	if err := dense.EnsureMNISTDownloads(); err != nil {
+		log.Fatalf("Failed to ensure MNIST downloads: %v", err)
+	}
+
+	// Load the MNIST data
+	mnist, err := dense.LoadMNISTOLD()
+	if err != nil {
+		log.Fatalf("Failed to load MNIST data: %v", err)
+	}
+
+	// Print the number of images and labels for verification
+	fmt.Printf("Loaded %d images and %d labels\n", len(mnist.Images), len(mnist.Labels))
+
+	// Save the images and labels to disk
+	if err := dense.SaveMNISTImagesAndData(mnist, "./host/MNIST", "./host/mnistData.json"); err != nil {
+		log.Fatalf("Failed to save MNIST images and data: %v", err)
+	}
+
+	fmt.Println("Successfully saved images and labels.")
+}
+
+
+//step 2------------------------------
+// TrainAndEvaluateModel trains the model using a specified percentage of the data, then evaluates it
+func EvaluateModel(jsonFilePath string, modelConfig *dense.NetworkConfig, percentageTrain float64) (float64, error) {
+	// Load MNIST data from JSON file
+	mnistData, err := LoadMNISTData(jsonFilePath)
+	if err != nil {
+		return 0.0, fmt.Errorf("failed to load MNIST data: %w", err)
+	}
+
+	// Shuffle the data to ensure randomness
+	rand.Shuffle(len(mnistData), func(i, j int) {
+		mnistData[i], mnistData[j] = mnistData[j], mnistData[i]
+	})
+
+	// Split the data into training and testing sets
+	trainSize := int(percentageTrain * float64(len(mnistData)))
+	trainData := mnistData[:trainSize]
+	//testData := mnistData[trainSize:]
+
+	// Evaluate the model on the testing data
+	fmt.Println("Evaluating the model...")
+	accuracy := evaluateModel(trainData, modelConfig)
+
+	return accuracy, nil
+}
+
+
+// evaluateModel evaluates the model using the provided test data and returns accuracy
+func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+	correct := 0
+	for _, data := range testData {
+		inputs := convertImageToInputs(data.FileName) // Function to convert image to input values
+		outputPredicted := dense.Feedforward(modelConfig, inputs)
+
+		// Get the predicted label (the index of the max output value)
+		predictedLabel := getMaxIndex(outputPredicted)
+
+		// Compare with the actual label
+		if predictedLabel == data.Label {
+			correct++
+		}
+	}
+
+	// Calculate accuracy
+	accuracy := float64(correct) / float64(len(testData))
+	return accuracy
+}
+
+// convertImageToInputs converts the image file into input values for the network
+func convertImageToInputs(fileName string) map[string]interface{} {
+	// Here, you would load the image and convert it into a flat list of 784 values (28*28 grayscale)
+	// For simplicity, we return a placeholder
+	inputs := make(map[string]interface{})
+	for i := 0; i < 28*28; i++ {
+		inputs[fmt.Sprintf("input%d", i)] = rand.Float64() // Replace with actual image pixel values
+	}
+	return inputs
+}
+
+// convertLabelToOutputs converts the label into a one-hot encoding for output comparison
+func convertLabelToOutputs(label int) map[string]float64 {
+	outputs := make(map[string]float64)
+	for i := 0; i < 10; i++ {
+		if i == label {
+			outputs[fmt.Sprintf("output%d", i)] = 1.0
+		} else {
+			outputs[fmt.Sprintf("output%d", i)] = 0.0
+		}
+	}
+	return outputs
+}
+
+// getMaxIndex returns the index of the maximum value in the map
+func getMaxIndex(outputs map[string]float64) int {
+	maxIndex := 0
+	maxValue := -math.MaxFloat64
+	for i := 0; i < 10; i++ {
+		if outputs[fmt.Sprintf("output%d", i)] > maxValue {
+			maxIndex = i
+			maxValue = outputs[fmt.Sprintf("output%d", i)]
+		}
+	}
+	return maxIndex
+}
+
+//---step 3 make bulk of them
+
+// GenerateModels generates a specified number of models and saves them in the host/generations/0 folder.
+func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []string, projectName string) error {
+	// Create the directory to store the models
+	modelDir := "./host/generations/0"
+	if err := os.MkdirAll(modelDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create model directory: %w", err)
+	}
+
+	// Generate and save models
+	for i := 0; i < numModels; i++ {
+		modelID := fmt.Sprintf("model_%d", i)
+		modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, modelID, projectName)
+
+		// Serialize the model to JSON
+		modelFilePath := filepath.Join(modelDir, modelID+".json")
+		modelFile, err := os.Create(modelFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to create model file %s: %w", modelFilePath, err)
+		}
+		defer modelFile.Close()
+
+		encoder := json.NewEncoder(modelFile)
+		if err := encoder.Encode(modelConfig); err != nil {
+			return fmt.Errorf("failed to serialize model %s: %w", modelFilePath, err)
+		}
+
+		log.Printf("Saved model %d to %s\n", i, modelFilePath)
+	}
+
+	return nil
+}
+
+
+//step 4 randomly mutate ---------------
+// MutateAllModelsRandomly loads all models from `./host/generations/0`, mutates them, evaluates them, and saves them back with updated metadata
+func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, outputTypes []string, projectName string, mnistDataFilePath string, percentageTrain float64) error {
+	// Targeting the `generationDir` folder
+	files, err := ioutil.ReadDir(generationDir)
+	if err != nil {
+		return fmt.Errorf("failed to read models directory: %w", err)
+	}
+
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".json" {
+			modelFilePath := filepath.Join(generationDir, file.Name())
+
+			// Load the model
+			modelConfig, err := loadModel(modelFilePath)
+			if err != nil {
+				log.Printf("Failed to load model %s: %v", modelFilePath, err)
+				continue
+			}
+
+			// Check if the model has already been evaluated
+			if modelConfig.Metadata.LastTestAccuracy > 0 {
+				log.Printf("Model %s has already been evaluated with accuracy: %.2f%%. Skipping mutation and evaluation.", modelFilePath, modelConfig.Metadata.LastTestAccuracy*100)
+				continue
+			}
+
+			// Apply a random mutation to the model
+			applyRandomMutation(modelConfig)
+
+			// Evaluate the model after mutation
+			accuracy, err := EvaluateModel(mnistDataFilePath, modelConfig, percentageTrain)
+			if err != nil {
+				log.Printf("Failed to evaluate model %s: %v", modelFilePath, err)
+				continue
+			}
+
+			// Update the metadata with the new accuracy
+			modelConfig.Metadata.LastTestAccuracy = accuracy
+
+			// Save the mutated model back to the same file
+			if err := saveModel(modelFilePath, modelConfig); err != nil {
+				log.Printf("Failed to save mutated model %s: %v", modelFilePath, err)
+			} else {
+				log.Printf("Mutated and evaluated model saved: %s (Accuracy: %.2f%%)", modelFilePath, accuracy*100)
+			}
+		}
+	}
+
+	return nil
+}
+
+
+// Apply a random mutation to a model
+func applyRandomMutation(config *dense.NetworkConfig) {
+	mutations := []func(*dense.NetworkConfig){
+		func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.01, 20) },
+		func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 20, 0.01) },
+		func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
+		func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 20) },
+		func(c *dense.NetworkConfig) { dense.AddCNNLayerAtRandomPosition(c, 20) },
+	}
+
+	// Select a random mutation and apply it
+	rand.Seed(time.Now().UnixNano())
+	mutation := mutations[rand.Intn(len(mutations))]
+	mutation(config)
+}
+
+// Load a model from a file
+func loadModel(filePath string) (*dense.NetworkConfig, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open model file: %w", err)
+	}
+	defer file.Close()
+
+	var modelConfig dense.NetworkConfig
+	if err := json.NewDecoder(file).Decode(&modelConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode model: %w", err)
+	}
+
+	return &modelConfig, nil
+}
+
+// Save a model to a file
+func saveModel(filePath string, modelConfig *dense.NetworkConfig) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create model file: %w", err)
+	}
+	defer file.Close()
+
+	if err := json.NewEncoder(file).Encode(modelConfig); err != nil {
+		return fmt.Errorf("failed to encode model: %w", err)
+	}
+
+	return nil
+}
+
+func OLDmain() {
 	rand.Seed(time.Now().UnixNano())
 
 	// Test 1: FFNN + CNN Model

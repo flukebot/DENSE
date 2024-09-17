@@ -56,3 +56,11 @@ func SaveNetworkToFile(config *NetworkConfig, filename string) error {
 	err = writeToFile(filename, data)
 	return err
 }
+
+// Check if a directory exists
+func CheckDirExists(dirPath string) bool {
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		return false // Directory does not exist
+	}
+	return true // Directory exists
+}

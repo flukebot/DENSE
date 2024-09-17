@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +16,83 @@ import (
 
 // New URL to download MNIST dataset from Google's storage
 const baseURL = "https://storage.googleapis.com/cvdf-datasets/mnist/"
+
+
+
+// SaveMNISTImagesAndData saves the MNIST images as JPEGs and the mapping of image file names to labels in a JSON file
+func SaveMNISTImagesAndData(mnist *MNISTData, imgDir string, dataFile string) error {
+	// Create the directory for images if it doesn't exist
+	if err := os.MkdirAll(imgDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", imgDir, err)
+	}
+
+	
+
+	// Prepare the JSON structure
+	type MNISTImageData struct {
+		FileName string `json:"file_name"`
+		Label    int    `json:"label"`
+	}
+	var mnistData []MNISTImageData
+
+	// Save images and create the JSON mapping
+	for i, imgData := range mnist.Images {
+		imgFileName := fmt.Sprintf("img%d.jpg", i+1)
+		imgFilePath := filepath.Join(imgDir, imgFileName)
+
+		// Convert the byte array to an image and save it as a JPEG
+		if err := saveImageAsJPEG(imgFilePath, imgData); err != nil {
+			return fmt.Errorf("failed to save image %s: %w", imgFilePath, err)
+		}
+
+		// Add to the JSON data
+		mnistData = append(mnistData, MNISTImageData{
+			FileName: imgFileName,
+			Label:    int(mnist.Labels[i]),
+		})
+	}
+
+	// Write the JSON file with image data and labels
+	dataFilePath := filepath.Join(".", dataFile)
+	jsonFile, err := os.Create(dataFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to create JSON file %s: %w", dataFilePath, err)
+	}
+	defer jsonFile.Close()
+
+	encoder := json.NewEncoder(jsonFile)
+	if err := encoder.Encode(mnistData); err != nil {
+		return fmt.Errorf("failed to write to JSON file %s: %w", dataFilePath, err)
+	}
+
+	log.Printf("Successfully saved images and data to %s and %s\n", imgDir, dataFilePath)
+	return nil
+}
+
+// saveImageAsJPEG saves an image as a JPEG file
+func saveImageAsJPEG(filePath string, imgData []byte) error {
+	// Convert the byte array to an image (assuming grayscale 28x28 images for MNIST)
+	img := image.NewGray(image.Rect(0, 0, 28, 28))
+	img.Pix = imgData
+
+	// Create the output file
+	outFile, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create image file %s: %w", filePath, err)
+	}
+	defer outFile.Close()
+
+	// Save as JPEG with default options
+	var opts jpeg.Options
+	opts.Quality = 95
+	if err := jpeg.Encode(outFile, img, &opts); err != nil {
+		return fmt.Errorf("failed to encode JPEG image: %w", err)
+	}
+
+	return nil
+}
+
+
 
 // DownloadFile downloads a file from a URL and saves it locally
 func DownloadFile(filepath string, url string) error {
