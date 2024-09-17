@@ -30,7 +30,7 @@ func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int
     rand.Seed(time.Now().UnixNano())
 
     // Randomly select the mutation type to apply
-    switch rand.Intn(23) { // Updated to include the new mutation types
+    switch rand.Intn(34) { // Updated to include the new mutation types
     case int(MutateWeight):
         MutateWeights(config, learningRate, mutationRate)
     case int(AddNeuronMutation):

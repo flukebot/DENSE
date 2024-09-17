@@ -100,3 +100,14 @@ func CreateDirectory(path string) error {
 	}
 	return nil
 }
+
+func SaveNetworkConfig(filepath string, model *NetworkConfig) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file) // Now json package is properly imported
+	return encoder.Encode(model)
+}
