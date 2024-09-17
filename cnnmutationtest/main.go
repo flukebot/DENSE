@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,13 @@ import (
 type MNISTImageData struct {
 	FileName string `json:"file_name"`
 	Label    int    `json:"label"`
+}
+
+// TopModel represents a model and its accuracy
+type TopModel struct {
+	Config   *dense.NetworkConfig
+	Accuracy float64
+	Path     string
 }
 
 func main() {
@@ -38,6 +46,8 @@ func main() {
 	outputTypes := []string{"softmax"} // Activation type for output layer
 	mnistDataFilePath := "./host/mnistData.json"
 	percentageTrain := 0.8
+	numModels := 100
+	generationNum := 500
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
 
 
@@ -60,23 +70,55 @@ func main() {
 	if !dense.CheckDirExists(generationDir) {
 		fmt.Println("Generation folder doesn't exist, generating models.")
 		// Number of models to generate
-		numModels := 100
+		
 
 		// Generate the models and save them to host/generations/0
 		if err := GenerateModels(numModels, inputSize, outputSize, outputTypes, projectName); err != nil {
 			log.Fatalf("Failed to generate models: %v", err)
 		}
 		fmt.Println("Model generation complete.")
+
+		
 	} else {
 		fmt.Println("Generation folder already exists, skipping model generation.")
 	}
 
-	// Call the mutate function to mutate models inside ./host/generations/0
-	err := MutateAllModelsRandomly(generationDir,inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain)
-	if err != nil {
-		log.Fatalf("Error mutating models: %v", err)
+
+
+
+
+
+
+	
+	// Loop from 0 to generationNum
+	for i := 0; i <= generationNum; i++ {
+
+		// Define the directories for the current and next generation
+		currentGenDir := fmt.Sprintf("./host/generations/%d", i)
+		nextGenDir := fmt.Sprintf("./host/generations/%d", i+1) // Increment for next generation
+
+		// Print the current generation number
+		fmt.Printf("Processing generation: %d\n", i)
+
+		// Call the mutate function to mutate models inside the current generation
+		fmt.Printf("Mutating models in generation %d...\n", i)
+		err := MutateAllModelsRandomly(currentGenDir, inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain,true)
+		if err != nil {
+			log.Fatalf("Error mutating models in generation %d: %v", i, err)
+		}
+		fmt.Printf("All models in generation %d have been mutated, evaluated, and saved.\n", i)
+
+		// Evolve to the next generation
+		fmt.Printf("Evolving models from generation %d to %d...\n", i, i+1)
+		err = EvolveNextGeneration(currentGenDir, nextGenDir, numModels, 0.1, inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain)
+		if err != nil {
+			log.Fatalf("Error evolving models from generation %d to %d: %v", i, i+1, err)
+		}
+		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)
 	}
-	fmt.Println("All models have been mutated, evaluated, and saved.")
+
+	fmt.Println("Completed all generations.")
+
 }
 
 
@@ -255,53 +297,80 @@ func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []stri
 
 
 //step 4 randomly mutate ---------------
-// MutateAllModelsRandomly loads all models from `./host/generations/0`, mutates them, evaluates them, and saves them back with updated metadata
-func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, outputTypes []string, projectName string, mnistDataFilePath string, percentageTrain float64) error {
+// MutateAllModelsRandomly mutates all models inside the given generation directory.
+// If `useGoroutines` is true, it will process each model on a separate goroutine (thread).
+func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, outputTypes []string, projectName string, mnistDataFilePath string, percentageTrain float64, useGoroutines bool) error {
 	// Targeting the `generationDir` folder
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {
 		return fmt.Errorf("failed to read models directory: %w", err)
 	}
 
+	// WaitGroup to track goroutines if used
+	var wg sync.WaitGroup
+
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".json" {
 			modelFilePath := filepath.Join(generationDir, file.Name())
 
-			// Load the model
-			modelConfig, err := loadModel(modelFilePath)
-			if err != nil {
-				log.Printf("Failed to load model %s: %v", modelFilePath, err)
-				continue
-			}
-
-			// Check if the model has already been evaluated
-			if modelConfig.Metadata.LastTestAccuracy > 0 {
-				log.Printf("Model %s has already been evaluated with accuracy: %.2f%%. Skipping mutation and evaluation.", modelFilePath, modelConfig.Metadata.LastTestAccuracy*100)
-				continue
-			}
-
-			// Apply a random mutation to the model
-			applyRandomMutation(modelConfig)
-
-			// Evaluate the model after mutation
-			accuracy, err := EvaluateModel(mnistDataFilePath, modelConfig, percentageTrain)
-			if err != nil {
-				log.Printf("Failed to evaluate model %s: %v", modelFilePath, err)
-				continue
-			}
-
-			// Update the metadata with the new accuracy
-			modelConfig.Metadata.LastTestAccuracy = accuracy
-
-			// Save the mutated model back to the same file
-			if err := saveModel(modelFilePath, modelConfig); err != nil {
-				log.Printf("Failed to save mutated model %s: %v", modelFilePath, err)
+			// If goroutines are enabled, process each file in a separate thread
+			if useGoroutines {
+				wg.Add(1)
+				go func(modelFilePath string) {
+					defer wg.Done()
+					if err := processModel(modelFilePath, mnistDataFilePath, percentageTrain); err != nil {
+						log.Printf("Error processing model %s: %v", modelFilePath, err)
+					}
+				}(modelFilePath)
 			} else {
-				log.Printf("Mutated and evaluated model saved: %s (Accuracy: %.2f%%)", modelFilePath, accuracy*100)
+				// Process files sequentially without goroutines
+				if err := processModel(modelFilePath, mnistDataFilePath, percentageTrain); err != nil {
+					log.Printf("Error processing model %s: %v", modelFilePath, err)
+				}
 			}
 		}
 	}
 
+	// Wait for all goroutines to complete if used
+	if useGoroutines {
+		wg.Wait()
+	}
+
+	return nil
+}
+
+// processModel handles loading, mutating, evaluating, and saving a single model.
+func processModel(modelFilePath, mnistDataFilePath string, percentageTrain float64) error {
+	// Load the model
+	modelConfig, err := loadModel(modelFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to load model %s: %w", modelFilePath, err)
+	}
+
+	// Check if the model has already been evaluated
+	if modelConfig.Metadata.LastTestAccuracy > 0 {
+		log.Printf("Model %s has already been evaluated with accuracy: %.2f%%. Skipping mutation and evaluation.", modelFilePath, modelConfig.Metadata.LastTestAccuracy*100)
+		return nil
+	}
+
+	// Apply a random mutation to the model
+	applyRandomMutation(modelConfig)
+
+	// Evaluate the model after mutation
+	accuracy, err := EvaluateModel(mnistDataFilePath, modelConfig, percentageTrain)
+	if err != nil {
+		return fmt.Errorf("failed to evaluate model %s: %w", modelFilePath, err)
+	}
+
+	// Update the metadata with the new accuracy
+	modelConfig.Metadata.LastTestAccuracy = accuracy
+
+	// Save the mutated model back to the same file
+	if err := saveModel(modelFilePath, modelConfig); err != nil {
+		return fmt.Errorf("failed to save mutated model %s: %w", modelFilePath, err)
+	}
+
+	log.Printf("Mutated and evaluated model saved: %s (Accuracy: %.2f%%)", modelFilePath, accuracy*100)
 	return nil
 }
 
@@ -352,6 +421,136 @@ func saveModel(filePath string, modelConfig *dense.NetworkConfig) error {
 
 	return nil
 }
+
+
+//step 5 --------------
+//step 5 --------------
+func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPercentage float64, inputSize, outputSize int, outputTypes []string, projectName, mnistDataFilePath string, percentageTrain float64) error {
+	// Read all models from the current generation
+	files, err := ioutil.ReadDir(currentGenDir)
+	if err != nil {
+		return fmt.Errorf("failed to read current generation directory: %w", err)
+	}
+
+	var models []*dense.NetworkConfig
+
+	// Load all models
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".json" {
+			modelFilePath := filepath.Join(currentGenDir, file.Name())
+
+			modelConfig, err := loadModel(modelFilePath)
+			if err != nil {
+				log.Printf("Failed to load model %s: %v", modelFilePath, err)
+				continue
+			}
+
+			// Evaluate the model if not already evaluated
+			if modelConfig.Metadata.LastTestAccuracy == 0 {
+				accuracy, err := EvaluateModel(mnistDataFilePath, modelConfig, percentageTrain)
+				if err != nil {
+					log.Printf("Failed to evaluate model %s: %v", modelFilePath, err)
+					continue
+				}
+				modelConfig.Metadata.LastTestAccuracy = accuracy
+				saveModel(modelFilePath, modelConfig)
+			}
+
+			// Add the model to the list
+			models = append(models, modelConfig)
+		}
+	}
+
+	// Sort the models by accuracy (descending)
+	models = findTopModels(models, topPercentage)
+
+	// Create the directory for the next generation
+	if err := os.MkdirAll(nextGenDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create next generation directory: %w", err)
+	}
+
+	// Number of top models to select
+	topCount := int(float64(numModels) * topPercentage)
+
+	// 1. Copy the top 10% without mutations to the next generation
+	for i := 0; i < topCount; i++ {
+		modelID := fmt.Sprintf("model_%d", i)
+		modelFilePath := filepath.Join(nextGenDir, modelID+".json")
+
+		// Load the model from the current generation
+		modelConfig := models[i]
+
+		// Save the model without any mutations in the next generation folder
+		if err := saveModel(modelFilePath, modelConfig); err != nil {
+			return fmt.Errorf("failed to save model: %v", err)
+		}
+	}
+
+	// 2. Calculate how many models each top model will generate with mutations
+	mutationCountPerTopModel := (numModels - topCount) / topCount
+
+	// 3. Mutate the top models and fill the remaining spots in the next generation
+	index := topCount
+	for i := 0; i < topCount; i++ {
+		for j := 0; j < mutationCountPerTopModel; j++ {
+			// Reload the top model from the current generation
+			modelConfig := models[i]
+
+			// Apply random mutation
+			applyRandomMutation(modelConfig)
+
+			// Save the mutated model into the next generation folder
+			modelID := fmt.Sprintf("model_%d", index)
+			modelFilePath := filepath.Join(nextGenDir, modelID+".json")
+			modelConfig.Metadata.LastTestAccuracy = 0.0
+			if err := saveModel(modelFilePath, modelConfig); err != nil {
+				return fmt.Errorf("failed to save mutated model: %v", err)
+			}
+
+			index++
+		}
+	}
+
+	// If we have any remaining models to fill (because of rounding issues)
+	for index < numModels {
+		// Reload additional models from the top ones
+		modelConfig := models[index % topCount]
+
+		// Apply random mutation
+		applyRandomMutation(modelConfig)
+
+		// Save the model with mutation to the next generation
+		modelID := fmt.Sprintf("model_%d", index)
+		modelFilePath := filepath.Join(nextGenDir, modelID+".json")
+		if err := saveModel(modelFilePath, modelConfig); err != nil {
+			return fmt.Errorf("failed to save mutated model: %v", err)
+		}
+
+		index++
+	}
+
+	log.Printf("Successfully created generation %s with %d models.", nextGenDir, numModels)
+	return nil
+}
+
+
+// Helper function to find the top models based on accuracy
+func findTopModels(models []*dense.NetworkConfig, topPercentage float64) []*dense.NetworkConfig {
+	// Sort models based on LastTestAccuracy (descending order)
+	for i := 0; i < len(models); i++ {
+		for j := i + 1; j < len(models); j++ {
+			if models[i].Metadata.LastTestAccuracy < models[j].Metadata.LastTestAccuracy {
+				models[i], models[j] = models[j], models[i]
+			}
+		}
+	}
+
+	// Return the top percentage of models
+	topCount := int(float64(len(models)) * topPercentage)
+	return models[:topCount]
+}
+
+
 
 func OLDmain() {
 	rand.Seed(time.Now().UnixNano())
