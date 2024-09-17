@@ -529,54 +529,60 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 }
 
 func deepCopyLayer(layer Layer) Layer {
-	newLayer := Layer{
-		LayerType: layer.LayerType,
-	}
-	switch layer.LayerType {
-	case "dense":
-		newLayer.Neurons = make(map[string]Neuron)
-		for key, neuron := range layer.Neurons {
-			newNeuron := Neuron{
-				ActivationType: neuron.ActivationType,
-				Bias:           neuron.Bias,
-				Connections:    make(map[string]Connection),
-			}
-			for connKey, conn := range neuron.Connections {
-				newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
-			}
-			newLayer.Neurons[key] = newNeuron
-		}
-	case "conv":
-		newLayer.Filters = make([]Filter, len(layer.Filters))
-		for i, filter := range layer.Filters {
-			newWeights := make([][]float64, len(filter.Weights))
-			for j := range filter.Weights {
-				newWeights[j] = make([]float64, len(filter.Weights[j]))
-				copy(newWeights[j], filter.Weights[j])
-			}
-			newLayer.Filters[i] = Filter{
-				Weights: newWeights,
-				Bias:    filter.Bias,
-			}
-		}
-		newLayer.Stride = layer.Stride
-		newLayer.Padding = layer.Padding
-	case "lstm":
-		newLayer.LSTMCells = make([]LSTMCell, len(layer.LSTMCells))
-		for i, cell := range layer.LSTMCells {
-			newCell := LSTMCell{
-				Bias:          cell.Bias,
-				InputWeights:  make([]float64, len(cell.InputWeights)),
-				ForgetWeights: make([]float64, len(cell.ForgetWeights)),
-				OutputWeights: make([]float64, len(cell.OutputWeights)),
-				CellWeights:   make([]float64, len(cell.CellWeights)),
-			}
-			copy(newCell.InputWeights, cell.InputWeights)
-			copy(newCell.ForgetWeights, cell.ForgetWeights)
-			copy(newCell.OutputWeights, cell.OutputWeights)
-			copy(newCell.CellWeights, cell.CellWeights)
-			newLayer.LSTMCells[i] = newCell
-		}
-	}
-	return newLayer
+    newLayer := Layer{
+        LayerType: layer.LayerType,
+    }
+    
+    switch layer.LayerType {
+    case "dense":
+        // Ensure the neurons and connections are deep copied
+        newLayer.Neurons = make(map[string]Neuron)
+        for key, neuron := range layer.Neurons {
+            newNeuron := Neuron{
+                ActivationType: neuron.ActivationType,
+                Bias:           neuron.Bias,
+                Connections:    make(map[string]Connection),
+            }
+            for connKey, conn := range neuron.Connections {
+                newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
+            }
+            newLayer.Neurons[key] = newNeuron
+        }
+    case "conv":
+        // Copy filters for convolutional layers
+        newLayer.Filters = make([]Filter, len(layer.Filters))
+        for i, filter := range layer.Filters {
+            newWeights := make([][]float64, len(filter.Weights))
+            for j := range filter.Weights {
+                newWeights[j] = make([]float64, len(filter.Weights[j]))
+                copy(newWeights[j], filter.Weights[j])
+            }
+            newLayer.Filters[i] = Filter{
+                Weights: newWeights,
+                Bias:    filter.Bias,
+            }
+        }
+        newLayer.Stride = layer.Stride
+        newLayer.Padding = layer.Padding
+    case "lstm":
+        // Copy LSTM cells for LSTM layers
+        newLayer.LSTMCells = make([]LSTMCell, len(layer.LSTMCells))
+        for i, cell := range layer.LSTMCells {
+            newCell := LSTMCell{
+                Bias:          cell.Bias,
+                InputWeights:  make([]float64, len(cell.InputWeights)),
+                ForgetWeights: make([]float64, len(cell.ForgetWeights)),
+                OutputWeights: make([]float64, len(cell.OutputWeights)),
+                CellWeights:   make([]float64, len(cell.CellWeights)),
+            }
+            copy(newCell.InputWeights, cell.InputWeights)
+            copy(newCell.ForgetWeights, cell.ForgetWeights)
+            copy(newCell.OutputWeights, cell.OutputWeights)
+            copy(newCell.CellWeights, cell.CellWeights)
+            newLayer.LSTMCells[i] = newCell
+        }
+    }
+
+    return newLayer
 }
+

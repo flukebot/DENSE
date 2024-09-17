@@ -25,11 +25,10 @@ const (
     ShuffleLayerConnectionsMutation
     ShuffleLayersMutation // New mutation type to shuffle layers
 )
-
 // Example usage in MutateNetwork
 func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int) {
     rand.Seed(time.Now().UnixNano())
-    //fmt.Println(int(MutateWeight))
+
     // Randomly select the mutation type to apply
     switch rand.Intn(23) { // Updated to include the new mutation types
     case int(MutateWeight):
@@ -78,8 +77,38 @@ func MutateNetwork(config *NetworkConfig, learningRate float64, mutationRate int
         InvertActivationFunctions(config, mutationRate)
     case 22: // Invert connections
         InvertConnections(config, mutationRate)
+
+    // LSTM mutations
+    case 23: 
+        MutateLSTMCells(config, mutationRate)
+    case 24: 
+        AddLSTMLayerAtRandomPosition(config, mutationRate)
+    case 25:
+        InvertLSTMWeights(config, mutationRate)
+    case 26:
+        RandomizeLSTMWeights(config, mutationRate)
+    case 27:
+        MutateLSTMBiases(config, mutationRate, learningRate) // Fixed argument mismatch
+    case 28:
+        MutateLSTMWeights(config, learningRate, mutationRate) // Fixed argument mismatch
+
+    // CNN mutations
+    case 29:
+        MutateCNNWeights(config, learningRate, mutationRate) // Fixed argument mismatch
+    case 30:
+        MutateCNNBiases(config, mutationRate, learningRate)  // Fixed argument mismatch
+    case 31:
+        RandomizeCNNWeights(config, mutationRate) // Fixed argument mismatch
+    case 32:
+        InvertCNNWeights(config, mutationRate)
+
+    case 33:
+        AddCNNLayerAtRandomPosition(config, mutationRate)
     }
+
+    // restoreInputAndOutputLayers(config, savedInputLayer, savedOutputLayer)
 }
+
 
 
 // InvertWeights inverts a percentage of the network's weights based on the mutation rate
@@ -970,18 +999,31 @@ func SwapLayerActivations(config *NetworkConfig, mutationRate int) {
         // Randomly select two layers to swap activations
         idx1 := rand.Intn(len(config.Layers.Hidden))
         idx2 := rand.Intn(len(config.Layers.Hidden))
+        
         if idx1 != idx2 {
             layer1 := config.Layers.Hidden[idx1]
             layer2 := config.Layers.Hidden[idx2]
-            for neuronID, neuron1 := range layer1.Neurons {
-                neuron2 := layer2.Neurons[neuronID]
-                neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
-                layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
+            
+            // Ensure both layers are of type "dense" and have neurons
+            if layer1.LayerType == "dense" && layer2.LayerType == "dense" && layer1.Neurons != nil && layer2.Neurons != nil {
+                for neuronID, neuron1 := range layer1.Neurons {
+                    neuron2, ok := layer2.Neurons[neuronID]
+                    if !ok {
+                        continue // Ensure neuron exists in both layers
+                    }
+                    if neuron1.Connections == nil || neuron2.Connections == nil {
+                        // Skip if connections are nil
+                        continue
+                    }
+                    neuron1.ActivationType, neuron2.ActivationType = neuron2.ActivationType, neuron1.ActivationType
+                    layer1.Neurons[neuronID], layer2.Neurons[neuronID] = neuron1, neuron2
+                }
             }
-           //  fmt.Printf("Swapped activation functions between layer %d and layer %d\n", idx1+1, idx2+1)
         }
     }
 }
+
+
 
 
 func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
@@ -1005,5 +1047,63 @@ func ShuffleLayerConnections(config *NetworkConfig, mutationRate int) {
            //  fmt.Printf("Shuffled connections in layer %d\n", layerIdx+1)
         }
     }
+}
+
+
+
+func SaveInputAndOutputLayers(config *NetworkConfig) (inputLayer, outputLayer Layer) {
+    inputLayer = config.Layers.Input   // Save input layer
+    outputLayer = config.Layers.Output // Save output layer
+    return inputLayer, outputLayer
+}
+
+func RestoreInputAndOutputLayers(config *NetworkConfig, inputLayer, outputLayer Layer) {
+    config.Layers.Input = inputLayer   // Restore input layer
+    config.Layers.Output = outputLayer // Restore output layer
+}
+
+func CheckForLayerChanges(original, mutated Layer, layerType string) {
+    // Check if the number of neurons is different
+    if len(original.Neurons) != len(mutated.Neurons) {
+        fmt.Printf("Warning: %s layer was altered during mutation! (Neuron count changed)\n", layerType)
+        return
+    }
+
+    // Iterate over the neurons in the original layer and compare with the mutated layer
+    for neuronID, originalNeuron := range original.Neurons {
+        mutatedNeuron, exists := mutated.Neurons[neuronID]
+        if !exists {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Neuron %s removed)\n", layerType, neuronID)
+            return
+        }
+
+        // Check if the activation function changed
+        if originalNeuron.ActivationType != mutatedNeuron.ActivationType {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Activation function of neuron %s changed)\n", layerType, neuronID)
+            return
+        }
+
+        // Compare connections
+        if len(originalNeuron.Connections) != len(mutatedNeuron.Connections) {
+            fmt.Printf("Warning: %s layer was altered during mutation! (Connection count for neuron %s changed)\n", layerType, neuronID)
+            return
+        }
+
+        for connID, originalConn := range originalNeuron.Connections {
+            mutatedConn, connExists := mutatedNeuron.Connections[connID]
+            if !connExists {
+                fmt.Printf("Warning: %s layer was altered during mutation! (Connection %s for neuron %s removed)\n", layerType, connID, neuronID)
+                return
+            }
+
+            // Optionally, check for weight changes
+            if originalConn.Weight != mutatedConn.Weight {
+                fmt.Printf("Warning: %s layer was altered during mutation! (Connection weight for neuron %s -> %s changed)\n", layerType, neuronID, connID)
+                return
+            }
+        }
+    }
+
+    fmt.Printf("%s layer was not altered during mutation.\n", layerType)
 }
 

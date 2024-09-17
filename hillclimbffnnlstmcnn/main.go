@@ -79,6 +79,9 @@ func hillClimbingOptimize(trainData, testData *dense.MNISTData, iterations, batc
 		return 0.0
 	}
 
+	// Save the input and output layers
+	savedInputLayer, savedOutputLayer := dense.SaveInputAndOutputLayers(bestConfig)
+
 	// Initial accuracies
 	bestTrainingAccuracy := bestConfig.Metadata.LastTrainingAccuracy
 	bestTestAccuracy := bestConfig.Metadata.LastTestAccuracy
@@ -135,6 +138,11 @@ func hillClimbingOptimize(trainData, testData *dense.MNISTData, iterations, batc
 				fmt.Printf("Warning: Failed to delete temp model file: %s\n", result.tmpModel)
 			}
 		}
+
+		// Check and restore input/output layers after each batch
+		dense.RestoreInputAndOutputLayers(bestConfig, savedInputLayer, savedOutputLayer)
+		dense.CheckForLayerChanges(savedInputLayer, bestConfig.Layers.Input, "Input")
+		dense.CheckForLayerChanges(savedOutputLayer, bestConfig.Layers.Output, "Output")
 
 		fmt.Printf("\nBatch ending at iteration %d: Current best training accuracy: %.4f%%\n", i+batchSize, bestTrainingAccuracy*100)
 	}
