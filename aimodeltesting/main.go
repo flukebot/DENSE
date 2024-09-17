@@ -51,11 +51,11 @@ func main() {
 	outputTypes := []string{"softmax"} // Use softmax for classification
 	modelLocation := "models"
 	methods := []string{"HillClimb"}           // Define the optimization method
-	layerTypes := []string{"FFNN", "CNN", "LSTM"} // Define types of layers to test
+	layerTypes := []string{"FFNN"}             // Focus on FFNN for simplicity
 	numModels := 50                        // Number of models to create and test
 	cycleAllMutations := true             // Flag to cycle through all mutations
-	topX := 1                             // Only the best model will be used for mutation
-	numGenerations := 5                   // Number of generations to run the hill climb
+	topX := 5                             // Number of top models to select
+	numGenerations := 500                // Number of generations to run the hill climb
 
 	// Load file path for project state
 	loadFilePath := filepath.Join(modelLocation, projectName+"_save_state.json")
@@ -87,8 +87,8 @@ func main() {
 		return
 	}
 
-	// Split the MNIST data into training and testing sets
-	_, testData := splitData(mnist)
+	// Use the training data as per your request
+	trainData, _ := splitData(mnist)
 
 	// Step 6: Run the hill-climbing algorithm across multiple generations
 	for generation := startGeneration; generation < numGenerations; generation++ {
@@ -117,7 +117,7 @@ func main() {
 		}
 
 		// Step 8: Evaluate each model and rank them by accuracy
-		modelScores := evaluateAndRankModels(manager, generationFolder, numModels, testData, evaluationResults)
+		modelScores := evaluateAndRankModels(generationFolder, numModels, trainData, evaluationResults)
 
 		// Save evaluation results
 		err = saveEvaluationResults(generationFolder, evaluationResults)
@@ -126,7 +126,7 @@ func main() {
 			return
 		}
 
-		// Step 9: Mutate the best-performing model to create the next generation
+		// Step 9: Mutate the best-performing models to create the next generation
 		if generation < numGenerations-1 {
 			nextGenerationFolder := filepath.Join(modelLocation, fmt.Sprintf("%d", generation+1))
 			err := dense.CreateDirectory(nextGenerationFolder)
@@ -135,8 +135,8 @@ func main() {
 				return
 			}
 
-			// Mutate the best-performing model to create the next generation
-			createNextGeneration(manager, modelScores, generationFolder, nextGenerationFolder, numModels)
+			// Mutate the best-performing models to create the next generation
+			createNextGeneration(manager, modelScores, generationFolder, nextGenerationFolder, numModels, topX)
 		}
 
 		// Save the current generation number
@@ -153,7 +153,7 @@ func main() {
 }
 
 // evaluateAndRankModels evaluates the fitness of each model and returns them sorted by accuracy
-func evaluateAndRankModels(manager *dense.AIModelManager, generationFolder string, numModels int, testData *dense.MNISTData, evaluationResults map[string]dense.ModelData) []dense.ModelData {
+func evaluateAndRankModels(generationFolder string, numModels int, trainData *dense.MNISTData, evaluationResults map[string]dense.ModelData) []dense.ModelData {
 	var modelScores []dense.ModelData
 
 	// Evaluate each model
@@ -174,8 +174,8 @@ func evaluateAndRankModels(manager *dense.AIModelManager, generationFolder strin
 			continue
 		}
 
-		// Evaluate the fitness of the model on the test dataset
-		fitness := evaluateFitness(config, testData)
+		// Evaluate the fitness of the model on the training dataset
+		fitness := evaluateFitness(config, trainData)
 		fmt.Printf("Model %s accuracy: %.4f%%\n", modelName, fitness*100)
 
 		// Append the model data with fitness score
@@ -206,23 +206,32 @@ func evaluateAndRankModels(manager *dense.AIModelManager, generationFolder strin
 	return modelScores
 }
 
-// createNextGeneration creates the next generation of models by mutating the best model
-func createNextGeneration(manager *dense.AIModelManager, modelScores []dense.ModelData, currentGenerationFolder, nextGenerationFolder string, numModels int) {
-	bestModelName := modelScores[0].ModelName
-
-	// Load the best model configuration from the current generation
-	bestModelFile := filepath.Join(currentGenerationFolder, fmt.Sprintf("%s.json", bestModelName))
-	bestConfig, err := dense.LoadNetworkFromFile(bestModelFile)
-	if err != nil {
-		fmt.Printf("Error loading best model %s: %v\n", bestModelName, err)
-		return
-	}
-
+// createNextGeneration creates the next generation of models by mutating the best models
+func createNextGeneration(manager *dense.AIModelManager, modelScores []dense.ModelData, currentGenerationFolder, nextGenerationFolder string, numModels, topX int) {
 	learningRate := 0.01
 	mutationRate := 20 // Adjust mutation rate as needed
 
-	// Generate new models by mutating the best model
+	// Calculate how many copies to make of each top model
+	copiesPerModel := numModels / topX
+
+	modelIndex := 0
+	modelCount := 0
+
+	// Generate new models by copying and mutating the best models
 	for i := 0; i < numModels; i++ {
+		if modelCount >= copiesPerModel && modelIndex < topX-1 {
+			modelIndex++
+			modelCount = 0
+		}
+
+		bestModelName := modelScores[modelIndex].ModelName
+		bestModelFile := filepath.Join(currentGenerationFolder, fmt.Sprintf("%s.json", bestModelName))
+		bestConfig, err := dense.LoadNetworkFromFile(bestModelFile)
+		if err != nil {
+			fmt.Printf("Error loading best model %s: %v\n", bestModelName, err)
+			continue
+		}
+
 		modelName := fmt.Sprintf("model-%d", i+1)
 
 		// Deep copy the best model configuration
@@ -240,6 +249,8 @@ func createNextGeneration(manager *dense.AIModelManager, modelScores []dense.Mod
 		} else {
 			fmt.Printf("Mutated model %s saved to %s\n", modelName, mutatedModelFile)
 		}
+
+		modelCount++
 	}
 }
 
@@ -261,7 +272,7 @@ func splitData(mnist *dense.MNISTData) (trainData, testData *dense.MNISTData) {
 	return trainData, testData
 }
 
-// Evaluate the model's performance on the MNIST test dataset
+// Evaluate the model's performance on the MNIST dataset
 func evaluateFitness(config *dense.NetworkConfig, mnist *dense.MNISTData) float64 {
 	correct := 0
 	total := len(mnist.Images)
