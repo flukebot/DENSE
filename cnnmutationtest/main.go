@@ -198,7 +198,7 @@ func EvaluateModel(jsonFilePath string, modelConfig *dense.NetworkConfig, percen
 	//testData := mnistData[trainSize:]
 
 	// Evaluate the model on the testing data
-	fmt.Println("Evaluating the model...")
+	//fmt.Println("Evaluating the model...")
 	accuracy := evaluateModel(trainData, modelConfig)
 
 	return accuracy, nil
@@ -446,7 +446,7 @@ func applyRandomMutation(config *dense.NetworkConfig) {
         mutation(config)
     }
 
-    fmt.Printf("Applied %d mutations to the model.\n", numMutations)
+    //fmt.Printf("Applied %d mutations to the model.\n", numMutations)
 }
 
 

@@ -1,7 +1,6 @@
 package dense
 
 import (
-	"fmt"
 	"math/rand"
 )
 
@@ -95,7 +94,7 @@ func AddCNNLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
         pos := rand.Intn(len(config.Layers.Hidden) + 1)
         config.Layers.Hidden = append(config.Layers.Hidden[:pos], append([]Layer{newLayer}, config.Layers.Hidden[pos:]...)...)
 
-        fmt.Printf("Added CNN layer with %dx%d filters at position %d.\n", randomFilterSize, randomFilterSize, pos)
+        //fmt.Printf("Added CNN layer with %dx%d filters at position %d.\n", randomFilterSize, randomFilterSize, pos)
     }
 }
 
@@ -169,7 +168,7 @@ func AddMultipleCNNLayers(config *NetworkConfig, mutationRate int, maxLayers int
             pos := rand.Intn(len(config.Layers.Hidden) + 1)
             config.Layers.Hidden = append(config.Layers.Hidden[:pos], append([]Layer{newLayer}, config.Layers.Hidden[pos:]...)...)
 
-            fmt.Printf("Added CNN layer with %dx%d filters, stride %d, padding %d at position %d.\n", randomFilterSize, randomFilterSize, randomStride, randomPadding, pos)
+            //fmt.Printf("Added CNN layer with %dx%d filters, stride %d, padding %d at position %d.\n", randomFilterSize, randomFilterSize, randomStride, randomPadding, pos)
         }
     }
 }
