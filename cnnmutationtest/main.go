@@ -535,13 +535,13 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 	// 1. Copy the top 10% without mutations to the next generation
 	for i := 0; i < topCount; i++ {
 		modelID := fmt.Sprintf("model_%d", i)
-		modelFilePath := filepath.Join(nextGenDir, modelID+"copy.json")
+		modelFilePath := filepath.Join(nextGenDir, modelID+".json")
 
 		// Load the model from the current generation
 		modelConfig := models[i]
 
 		  // Reset the LastTestAccuracy
-		  modelConfig.Metadata.LastTestAccuracy = 0.0
+		 // modelConfig.Metadata.LastTestAccuracy = 0.0
 
 		// Save the model without any mutations in the next generation folder
 		if err := saveModel(modelFilePath, modelConfig); err != nil {
