@@ -44,7 +44,7 @@ func main() {
 	// Set up the model configuration
 	projectName := "AIModelTestProject"
 	inputSize := 28 * 28               // Input size for MNIST data
-	outputSize := 1                    // Output size for MNIST digits (0-9)
+	outputSize := 10                   // Output size for MNIST digits (0-9)
 	outputTypes := []string{"softmax"} // Activation type for output layer
 	mnistDataFilePath := "./host/mnistData.json"
 	percentageTrain := 0.8
@@ -228,7 +228,7 @@ func OLDevaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfi
 	return accuracy
 }
 
-func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+func singleevaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
 	totalAccuracy := 0.0 // Sum of all proximity scores
 	threshold := 0.1     // Small value to avoid division by zero for label 0
 
@@ -285,6 +285,85 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) 
 	return averageAccuracy
 }
 
+func ProxyScoreevaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+    totalAccuracy := 0.0 // Sum of all sample proximity scores
+
+    for _, data := range testData {
+        inputs := convertImageToInputs(data.FileName) // Convert image to input values
+        outputPredicted := dense.Feedforward(modelConfig, inputs) // Get predicted outputs
+
+        // Get the target outputs (one-hot encoding of the label)
+        targetOutputs := convertLabelToOutputs(data.Label) // map[string]float64
+
+        sampleProximitySum := 0.0 // Sum of proximity scores for this sample
+
+        // Iterate over each output neuron (output0 to output9)
+        for i := 0; i < 10; i++ {
+            outputKey := fmt.Sprintf("output%d", i)
+            predictedValue, exists := outputPredicted[outputKey]
+            if !exists {
+                predictedValue = 0.0 // Assume 0 if not exists
+            }
+            targetValue := targetOutputs[outputKey]
+
+            // Calculate proximity score for this output neuron
+            proximityScore := 1.0 - math.Abs(predictedValue-targetValue)
+            // Ensure proximity score is between 0 and 1
+            if proximityScore < 0 {
+                proximityScore = 0
+            } else if proximityScore > 1 {
+                proximityScore = 1
+            }
+
+            sampleProximitySum += proximityScore
+        }
+
+        // Average proximity score for this sample
+        sampleProximityAvg := sampleProximitySum / 10.0
+
+        totalAccuracy += sampleProximityAvg
+    }
+
+    // Calculate the average accuracy as the total accuracy divided by the number of test samples
+    averageAccuracy := totalAccuracy / float64(len(testData))
+
+    // Ensure the returned accuracy is at least 0.1%
+    if averageAccuracy < 0.001 {
+        averageAccuracy = 0.001
+    }
+
+    return averageAccuracy
+}
+
+func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+    correct := 0
+
+    for _, data := range testData {
+        inputs := convertImageToInputs(data.FileName) // Convert image to input values
+        outputPredicted := dense.Feedforward(modelConfig, inputs) // Get predicted outputs
+
+        // Find the index of the maximum predicted value
+        predictedLabel := getMaxIndex(outputPredicted)
+
+        // Compare with the actual label
+        if predictedLabel == data.Label {
+            correct++
+        }
+    }
+
+    // Calculate accuracy as the proportion of correct predictions
+    accuracy := float64(correct) / float64(len(testData))
+
+    // Ensure the returned accuracy is at least 0.1%
+    if accuracy < 0.001 {
+        accuracy = 0.001
+    }
+
+    return accuracy
+}
+
+
+
 // convertImageToInputs loads the image file and converts it into input values for the network
 func convertImageToInputs(fileName string) map[string]interface{} {
 	// Construct the full file path
@@ -337,16 +416,22 @@ func convertLabelToOutputs(label int) map[string]float64 {
 
 // getMaxIndex returns the index of the maximum value in the map
 func getMaxIndex(outputs map[string]float64) int {
-	maxIndex := 0
-	maxValue := -math.MaxFloat64
-	for i := 0; i < 10; i++ {
-		if outputs[fmt.Sprintf("output%d", i)] > maxValue {
-			maxIndex = i
-			maxValue = outputs[fmt.Sprintf("output%d", i)]
-		}
-	}
-	return maxIndex
+    maxIndex := 0
+    maxValue := -math.MaxFloat64
+    for i := 0; i < 10; i++ {
+        key := fmt.Sprintf("output%d", i)
+        value, exists := outputs[key]
+        if !exists {
+            value = 0.0 // Assume 0 if key doesn't exist
+        }
+        if value > maxValue {
+            maxIndex = i
+            maxValue = value
+        }
+    }
+    return maxIndex
 }
+
 
 //---step 3 make bulk of them
 
