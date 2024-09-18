@@ -43,8 +43,8 @@ func main() {
 
 	// Set up the model configuration
 	projectName := "AIModelTestProject"
-	inputSize := 28 * 28   // Input size for MNIST data
-	outputSize := 10       // Output size for MNIST digits (0-9)
+	inputSize := 28 * 28               // Input size for MNIST data
+	outputSize := 1                    // Output size for MNIST digits (0-9)
 	outputTypes := []string{"softmax"} // Activation type for output layer
 	mnistDataFilePath := "./host/mnistData.json"
 	percentageTrain := 0.8
@@ -53,7 +53,7 @@ func main() {
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
 
 
-	
+
 	// Define the path to the MNIST data JSON file
 	jsonFilePath := "./host/mnistData.json"
 
@@ -66,13 +66,11 @@ func main() {
 	// Display the model accuracy
 	fmt.Printf("Model accuracy: %.2f%%\n", accuracy*100)*/
 
-
 	// Check if the generation folder exists, and generate models if it doesn't
 	generationDir := "./host/generations/0"
 	if !dense.CheckDirExists(generationDir) {
 		fmt.Println("Generation folder doesn't exist, generating models.")
 		// Number of models to generate
-		
 
 		// Generate the models and save them to host/generations/0
 		if err := GenerateModels(numModels, inputSize, outputSize, outputTypes, projectName); err != nil {
@@ -80,18 +78,10 @@ func main() {
 		}
 		fmt.Println("Model generation complete.")
 
-		
 	} else {
 		fmt.Println("Generation folder already exists, skipping model generation.")
 	}
 
-
-
-
-
-
-
-	
 	// Loop from 0 to generationNum
 	for i := 0; i <= generationNum; i++ {
 
@@ -104,7 +94,7 @@ func main() {
 
 		// Call the mutate function to mutate models inside the current generation
 		fmt.Printf("Mutating models in generation %d...\n", i)
-		err := MutateAllModelsRandomly(currentGenDir, inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain,true)
+		err := MutateAllModelsRandomly(currentGenDir, inputSize, outputSize, outputTypes, projectName, mnistDataFilePath, percentageTrain, true)
 		if err != nil {
 			log.Fatalf("Error mutating models in generation %d: %v", i, err)
 		}
@@ -122,7 +112,6 @@ func main() {
 	fmt.Println("Completed all generations.")
 
 }
-
 
 //step 1-----------------------------
 
@@ -148,8 +137,7 @@ func LoadMNISTData(jsonFilePath string) ([]MNISTImageData, error) {
 	return mnistData, nil
 }
 
-
-func setupMNIST(){
+func setupMNIST() {
 	// Create the directory for MNIST images
 	if err := os.MkdirAll("./host/MNIST", os.ModePerm); err != nil {
 		log.Fatalf("Failed to create MNIST directory: %v", err)
@@ -177,8 +165,7 @@ func setupMNIST(){
 	fmt.Println("Successfully saved images and labels.")
 }
 
-
-//step 2------------------------------
+// step 2------------------------------
 // TrainAndEvaluateModel trains the model using a specified percentage of the data, then evaluates it
 func EvaluateModel(jsonFilePath string, modelConfig *dense.NetworkConfig, percentageTrain float64) (float64, error) {
 	// Load MNIST data from JSON file
@@ -204,9 +191,8 @@ func EvaluateModel(jsonFilePath string, modelConfig *dense.NetworkConfig, percen
 	return accuracy, nil
 }
 
-
 // evaluateModel evaluates the model using the provided test data and returns accuracy
-func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+func OLDevaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
 	correct := 0
 	for _, data := range testData {
 		inputs := convertImageToInputs(data.FileName) // Function to convert image to input values
@@ -214,6 +200,22 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) 
 
 		// Get the predicted label (the index of the max output value)
 		predictedLabel := getMaxIndex(outputPredicted)
+
+		/*fmt.Println("----------------------------predicted---------------------------")
+		fmt.Println(outputPredicted)
+		fmt.Println("---")
+		fmt.Println(predictedLabel)
+		fmt.Println("-done-")
+		fmt.Println(data.Label)*/
+
+		// Check if output0 exists in the map
+		if val, exists := outputPredicted["output0"]; exists {
+			fmt.Println("----------------------------predicted---------------------------")
+			fmt.Printf("output0: %v\n", val)
+		} else {
+			fmt.Println("----------------------------predicted---------------------------")
+			fmt.Println("output0 not found")
+		}
 
 		// Compare with the actual label
 		if predictedLabel == data.Label {
@@ -226,43 +228,93 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) 
 	return accuracy
 }
 
-// convertImageToInputs loads the image file and converts it into input values for the network
-func convertImageToInputs(fileName string) map[string]interface{} {
-    // Construct the full file path
-    filePath := filepath.Join("./host/MNIST", fileName)
+func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) float64 {
+	totalAccuracy := 0.0 // Sum of all proximity scores
+	threshold := 0.1     // Small value to avoid division by zero for label 0
 
-    // Open the image file
-    imgFile, err := os.Open(filePath)
-    if err != nil {
-        log.Fatalf("Failed to open image file %s: %v", filePath, err)
-    }
-    defer imgFile.Close()
+	for _, data := range testData {
+		inputs := convertImageToInputs(data.FileName) // Function to convert image to input values
+		outputPredicted := dense.Feedforward(modelConfig, inputs)
 
-    // Decode the JPEG image
-    img, err := jpeg.Decode(imgFile)
-    if err != nil {
-        log.Fatalf("Failed to decode image file %s: %v", filePath, err)
-    }
+		// Check if output0 exists in the map
+		if val, exists := outputPredicted["output0"]; exists {
+			//fmt.Println("----------------------------predicted---------------------------")
+			//fmt.Printf("output0: %v\n", val)
 
-    // Ensure the image is in grayscale format
-    bounds := img.Bounds()
-    width, height := bounds.Max.X, bounds.Max.Y
+			// Get the actual label and convert it to float for comparison
+			actualLabelFloat := float64(data.Label)
 
-    inputs := make(map[string]interface{})
-    index := 0
-    for y := 0; y < height; y++ {
-        for x := 0; x < width; x++ {
-            colorPixel := img.At(x, y)
-            grayColor := color.GrayModel.Convert(colorPixel).(color.Gray)
-            pixelValue := float64(grayColor.Y) / 255.0 // Normalize pixel value to [0,1]
-            inputs[fmt.Sprintf("input%d", index)] = pixelValue
-            index++
-        }
-    }
+			// Calculate how close the predicted value is to the actual label
+			// Using max to avoid division by zero when the label is zero
+			proximityScore := 1.0 - (math.Abs(val-actualLabelFloat) / math.Max(actualLabelFloat, threshold))
 
-    return inputs
+			// Ensure proximity score is between 0 and 1
+			if proximityScore < 0 {
+				proximityScore = 0
+			} else if proximityScore > 1 {
+				proximityScore = 1
+			}
+
+			//fmt.Printf("Proximity Score for output0: %v\n", proximityScore)
+			totalAccuracy += proximityScore
+
+		} else {
+			//fmt.Println("----------------------------predicted---------------------------")
+			//fmt.Println("output0 not found")
+
+			// No prediction available, treat this as a score of 0
+			totalAccuracy += 0
+		}
+
+		// Optional: Uncomment if you want to print the predicted and actual label
+		/*fmt.Println("---")
+		fmt.Println(predictedLabel)
+		fmt.Println("-done-")
+		fmt.Println(data.Label)*/
+	}
+
+	// Calculate the average accuracy as the total accuracy divided by the number of test samples
+	averageAccuracy := totalAccuracy / float64(len(testData))
+	fmt.Println("total acc: ", averageAccuracy)
+	return averageAccuracy
 }
 
+// convertImageToInputs loads the image file and converts it into input values for the network
+func convertImageToInputs(fileName string) map[string]interface{} {
+	// Construct the full file path
+	filePath := filepath.Join("./host/MNIST", fileName)
+
+	// Open the image file
+	imgFile, err := os.Open(filePath)
+	if err != nil {
+		log.Fatalf("Failed to open image file %s: %v", filePath, err)
+	}
+	defer imgFile.Close()
+
+	// Decode the JPEG image
+	img, err := jpeg.Decode(imgFile)
+	if err != nil {
+		log.Fatalf("Failed to decode image file %s: %v", filePath, err)
+	}
+
+	// Ensure the image is in grayscale format
+	bounds := img.Bounds()
+	width, height := bounds.Max.X, bounds.Max.Y
+
+	inputs := make(map[string]interface{})
+	index := 0
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			colorPixel := img.At(x, y)
+			grayColor := color.GrayModel.Convert(colorPixel).(color.Gray)
+			pixelValue := float64(grayColor.Y) / 255.0 // Normalize pixel value to [0,1]
+			inputs[fmt.Sprintf("input%d", index)] = pixelValue
+			index++
+		}
+	}
+
+	return inputs
+}
 
 // convertLabelToOutputs converts the label into a one-hot encoding for output comparison
 func convertLabelToOutputs(label int) map[string]float64 {
@@ -324,8 +376,7 @@ func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []stri
 	return nil
 }
 
-
-//step 4 randomly mutate ---------------
+// step 4 randomly mutate ---------------
 // MutateAllModelsRandomly mutates all models inside the given generation directory.
 // If `useGoroutines` is true, it will process each model in batches of 10 with concurrent goroutines.
 func MutateAllModelsRandomly(generationDir string, inputSize, outputSize int, outputTypes []string, projectName string, mnistDataFilePath string, percentageTrain float64, useGoroutines bool) error {
@@ -421,35 +472,32 @@ func processModel(modelFilePath, mnistDataFilePath string, percentageTrain float
 	return nil
 }
 
-
 // Apply a random number of mutations to a model
 func applyRandomMutation(config *dense.NetworkConfig) {
-    mutations := []func(*dense.NetworkConfig){
-        func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.1, 40) },
-        func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 40, 0.1) },
-        func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
-        func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 40) },
-        func(c *dense.NetworkConfig) { dense.AddCNNLayerAtRandomPosition(c, 40) },
-        func(c *dense.NetworkConfig) { dense.MutateCNNFilterSize(c, 40) },           // Add mutation to CNN filter size
-        func(c *dense.NetworkConfig) { dense.MutateCNNStrideAndPadding(c, 40) },     // Add mutation to CNN stride and padding
-        func(c *dense.NetworkConfig) { dense.DuplicateCNNLayer(c, 40) },             // Add mutation to duplicate CNN layers
-        func(c *dense.NetworkConfig) { dense.AddMultipleCNNLayers(c, 40, 5) },       // Add multiple CNN layers
-    }
+	mutations := []func(*dense.NetworkConfig){
+		func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.1, 40) },
+		func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 40, 0.1) },
+		func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
+		func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 40) },
+		func(c *dense.NetworkConfig) { dense.AddCNNLayerAtRandomPosition(c, 40) },
+		func(c *dense.NetworkConfig) { dense.MutateCNNFilterSize(c, 40) },       // Add mutation to CNN filter size
+		func(c *dense.NetworkConfig) { dense.MutateCNNStrideAndPadding(c, 40) }, // Add mutation to CNN stride and padding
+		func(c *dense.NetworkConfig) { dense.DuplicateCNNLayer(c, 40) },         // Add mutation to duplicate CNN layers
+		func(c *dense.NetworkConfig) { dense.AddMultipleCNNLayers(c, 40, 5) },   // Add multiple CNN layers
+	}
 
-    // Select a random number of mutations between 1 and 30
-    rand.Seed(time.Now().UnixNano())
-    numMutations := rand.Intn(30) + 1 // Random number from 1 to 30
+	// Select a random number of mutations between 1 and 30
+	rand.Seed(time.Now().UnixNano())
+	numMutations := rand.Intn(30) + 1 // Random number from 1 to 30
 
-    // Apply the random number of mutations
-    for i := 0; i < numMutations; i++ {
-        mutation := mutations[rand.Intn(len(mutations))] // Randomly select a mutation
-        mutation(config)
-    }
+	// Apply the random number of mutations
+	for i := 0; i < numMutations; i++ {
+		mutation := mutations[rand.Intn(len(mutations))] // Randomly select a mutation
+		mutation(config)
+	}
 
-    //fmt.Printf("Applied %d mutations to the model.\n", numMutations)
+	//fmt.Printf("Applied %d mutations to the model.\n", numMutations)
 }
-
-
 
 // Load a model from a file
 func loadModel(filePath string) (*dense.NetworkConfig, error) {
@@ -482,9 +530,8 @@ func saveModel(filePath string, modelConfig *dense.NetworkConfig) error {
 	return nil
 }
 
-
-//step 5 --------------
-//step 5 --------------
+// step 5 --------------
+// step 5 --------------
 func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPercentage float64, inputSize, outputSize int, outputTypes []string, projectName, mnistDataFilePath string, percentageTrain float64) error {
 	// Read all models from the current generation
 	files, err := ioutil.ReadDir(currentGenDir)
@@ -540,8 +587,8 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 		// Load the model from the current generation
 		modelConfig := models[i]
 
-		  // Reset the LastTestAccuracy
-		 // modelConfig.Metadata.LastTestAccuracy = 0.0
+		// Reset the LastTestAccuracy
+		// modelConfig.Metadata.LastTestAccuracy = 0.0
 
 		// Save the model without any mutations in the next generation folder
 		if err := saveModel(modelFilePath, modelConfig); err != nil {
@@ -577,7 +624,7 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 	// If we have any remaining models to fill (because of rounding issues)
 	for index < numModels {
 		// Reload additional models from the top ones
-		modelConfig := models[index % topCount]
+		modelConfig := models[index%topCount]
 
 		// Apply random mutation
 		applyRandomMutation(modelConfig)
@@ -596,7 +643,6 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 	return nil
 }
 
-
 // Helper function to find the top models based on accuracy
 func findTopModels(models []*dense.NetworkConfig, topPercentage float64) []*dense.NetworkConfig {
 	// Sort models based on LastTestAccuracy (descending order)
@@ -612,8 +658,6 @@ func findTopModels(models []*dense.NetworkConfig, topPercentage float64) []*dens
 	topCount := int(float64(len(models)) * topPercentage)
 	return models[:topCount]
 }
-
-
 
 func OLDmain() {
 	rand.Seed(time.Now().UnixNano())
