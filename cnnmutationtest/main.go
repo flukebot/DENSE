@@ -275,7 +275,7 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) 
 
 	// Calculate the average accuracy as the total accuracy divided by the number of test samples
 	averageAccuracy := totalAccuracy / float64(len(testData))
-	fmt.Println("total acc: ", averageAccuracy)
+	//fmt.Println("total acc: ", averageAccuracy)
 	return averageAccuracy
 }
 
