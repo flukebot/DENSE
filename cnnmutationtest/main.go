@@ -540,6 +540,9 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 		// Load the model from the current generation
 		modelConfig := models[i]
 
+		  // Reset the LastTestAccuracy
+		  modelConfig.Metadata.LastTestAccuracy = 0.0
+
 		// Save the model without any mutations in the next generation folder
 		if err := saveModel(modelFilePath, modelConfig); err != nil {
 			return fmt.Errorf("failed to save model: %v", err)
