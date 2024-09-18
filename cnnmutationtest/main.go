@@ -4,6 +4,8 @@ import (
 	"dense"
 	"encoding/json"
 	"fmt"
+	"image/color"
+	"image/jpeg"
 	"io/ioutil"
 	"log"
 	"math"
@@ -224,16 +226,43 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig) 
 	return accuracy
 }
 
-// convertImageToInputs converts the image file into input values for the network
+// convertImageToInputs loads the image file and converts it into input values for the network
 func convertImageToInputs(fileName string) map[string]interface{} {
-	// Here, you would load the image and convert it into a flat list of 784 values (28*28 grayscale)
-	// For simplicity, we return a placeholder
-	inputs := make(map[string]interface{})
-	for i := 0; i < 28*28; i++ {
-		inputs[fmt.Sprintf("input%d", i)] = rand.Float64() // Replace with actual image pixel values
-	}
-	return inputs
+    // Construct the full file path
+    filePath := filepath.Join("./host/MNIST", fileName)
+
+    // Open the image file
+    imgFile, err := os.Open(filePath)
+    if err != nil {
+        log.Fatalf("Failed to open image file %s: %v", filePath, err)
+    }
+    defer imgFile.Close()
+
+    // Decode the JPEG image
+    img, err := jpeg.Decode(imgFile)
+    if err != nil {
+        log.Fatalf("Failed to decode image file %s: %v", filePath, err)
+    }
+
+    // Ensure the image is in grayscale format
+    bounds := img.Bounds()
+    width, height := bounds.Max.X, bounds.Max.Y
+
+    inputs := make(map[string]interface{})
+    index := 0
+    for y := 0; y < height; y++ {
+        for x := 0; x < width; x++ {
+            colorPixel := img.At(x, y)
+            grayColor := color.GrayModel.Convert(colorPixel).(color.Gray)
+            pixelValue := float64(grayColor.Y) / 255.0 // Normalize pixel value to [0,1]
+            inputs[fmt.Sprintf("input%d", index)] = pixelValue
+            index++
+        }
+    }
+
+    return inputs
 }
+
 
 // convertLabelToOutputs converts the label into a one-hot encoding for output comparison
 func convertLabelToOutputs(label int) map[string]float64 {
