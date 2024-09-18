@@ -188,9 +188,9 @@ func EvaluateModel(jsonFilePath string, modelConfig *dense.NetworkConfig, percen
 	}
 
 	// Shuffle the data to ensure randomness
-	rand.Shuffle(len(mnistData), func(i, j int) {
-		mnistData[i], mnistData[j] = mnistData[j], mnistData[i]
-	})
+	//rand.Shuffle(len(mnistData), func(i, j int) {
+	//	mnistData[i], mnistData[j] = mnistData[j], mnistData[i]
+	//})
 
 	// Split the data into training and testing sets
 	trainSize := int(percentageTrain * float64(len(mnistData)))
@@ -535,7 +535,7 @@ func EvolveNextGeneration(currentGenDir, nextGenDir string, numModels int, topPe
 	// 1. Copy the top 10% without mutations to the next generation
 	for i := 0; i < topCount; i++ {
 		modelID := fmt.Sprintf("model_%d", i)
-		modelFilePath := filepath.Join(nextGenDir, modelID+".json")
+		modelFilePath := filepath.Join(nextGenDir, modelID+"copy.json")
 
 		// Load the model from the current generation
 		modelConfig := models[i]
