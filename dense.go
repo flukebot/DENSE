@@ -433,7 +433,7 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 			},
 		},
 		// Add convolutional layer
-		{
+		/*{
 			LayerType: "conv",
 			Filters: []Filter{
 				{
@@ -460,7 +460,7 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 					Bias:          rand.Float64(),
 				},
 			},
-		},
+		},*/
 	}
 
 	// Define output neurons with customizable activation types, random weights, and biases
