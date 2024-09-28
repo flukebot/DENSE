@@ -46,8 +46,8 @@ func main() {
 	inputSize := 28 * 28               // Input size for MNIST data
 	outputSize := 10                   // Output size for MNIST digits (0-9)
 	outputTypes := []string{"softmax"} // Activation type for output layer
-	mnistDataFilePath := "./host/mnistData.json"
-	percentageTrain := 0.8
+	//mnistDataFilePath := "./host/mnistData.json"
+	//percentageTrain := 0.8
 	numModels := 100
 	generationNum := 500
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
@@ -86,7 +86,7 @@ func main() {
 	for i := 0; i <= generationNum; i++ {
 
 		// Define the directories for the current and next generation
-		currentGenDir := fmt.Sprintf("./host/generations/%d", i)
+		/*currentGenDir := fmt.Sprintf("./host/generations/%d", i)
 		nextGenDir := fmt.Sprintf("./host/generations/%d", i+1) // Increment for next generation
 
 		// Print the current generation number
@@ -106,11 +106,52 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error evolving models from generation %d to %d: %v", i, i+1, err)
 		}
-		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)
+		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)*/
+		TestLayerStateCache(generationDir,i, 10)
 	}
 
 	fmt.Println("Completed all generations.")
 
+}
+
+func TestLayerStateCache(generationDir string, generationNum int, topN int) {
+	fmt.Println("\n--- Testing Layer State Cache ---")
+
+	// Analyze layer hashes to find the top N most common sequences
+	topSequences, err := dense.AnalyzeLayerHashes(generationDir, topN)
+	if err != nil {
+		log.Fatalf("Failed to analyze layer hashes: %v", err)
+	}
+
+	// Display the top sequences
+	fmt.Printf("\nGeneration %d - Top %d Most Common Hidden Layer Sequences:\n", generationNum, topN)
+	for idx, seq := range topSequences {
+		fmt.Printf("%d. Count: %d\nSequence: %s\n\n", idx+1, seq.Count, seq.Hash)
+	}
+
+	// Construct a unique filename using the generation number
+	filename := fmt.Sprintf("./host/top_layer_sequences_gen%d.json", generationNum)
+
+	// Save the top sequences to the uniquely named file
+	saveTopSequences(topSequences, filename)
+}
+
+
+// saveTopSequences saves the top layer sequences to a JSON file for future use or analysis.
+func saveTopSequences(sequences []dense.LayerSequenceCount, filename string) {
+	data, err := json.MarshalIndent(sequences, "", "  ")
+	if err != nil {
+		log.Printf("Failed to marshal top sequences: %v", err)
+		return
+	}
+
+	err = ioutil.WriteFile(filename, data, 0644)
+	if err != nil {
+		log.Printf("Failed to save top sequences to file %s: %v", filename, err)
+		return
+	}
+
+	fmt.Printf("Top layer sequences saved to %s\n", filename)
 }
 
 //step 1-----------------------------
