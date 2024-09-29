@@ -6,8 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"encoding/csv"
+	"path/filepath"
+    "strconv"
+	"strings"
 	//"syscall/js"
 )
+
 
 // EnvType represents the environment type
 type EnvType string
@@ -107,3 +112,58 @@ func CreateDirectory(path string) error {
 	}
 	return nil
 }
+
+
+func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int) {
+    // Extract the directory and the model file name without the extension
+    dir, file := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+    
+    // Create the folder path where the CSV file will be saved
+    folderPath := filepath.Join(dir, modelName)
+    os.MkdirAll(folderPath, os.ModePerm)
+    
+    // Define the CSV file name using the layer index
+    fileName := filepath.Join(folderPath, "layer_" + strconv.Itoa(layerIndex) + ".csv")
+
+    // Open the CSV file in append mode. If the file does not exist, it will be created.
+    fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        panic(err)
+    }
+    defer fileHandle.Close()
+
+    writer := csv.NewWriter(fileHandle)
+    defer writer.Flush()
+
+    // Write the data to the CSV file depending on its type
+    switch v := data.(type) {
+    case map[string]float64:
+        var record []string
+        for key, value := range v {
+            record = append(record, key, strconv.FormatFloat(value, 'f', 6, 64))
+        }
+        writer.Write(record)
+
+    case [][]float64:
+        for _, row := range v {
+            var record []string
+            for _, value := range row {
+                record = append(record, strconv.FormatFloat(value, 'f', 6, 64))
+            }
+            writer.Write(record)
+        }
+
+    case [][][]float64:
+        for _, image := range v {
+            for _, row := range image {
+                var record []string
+                for _, value := range row {
+                    record = append(record, strconv.FormatFloat(value, 'f', 6, 64))
+                }
+                writer.Write(record)
+            }
+        }
+    }
+}
+

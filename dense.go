@@ -175,6 +175,79 @@ func Feedforward(config *NetworkConfig, inputValues map[string]interface{}) map[
 	return nil // or appropriate return
 }
 
+func FeedforwardLayerStateSaving(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, outputPath string) map[string]float64 {
+    var data interface{}
+
+    // Load input values into the data variable
+    if config.Layers.Input.LayerType == "dense" {
+        // Input is dense
+        inputData := make(map[string]float64)
+        for k, v := range inputValues {
+            if val, ok := v.(float64); ok {
+                inputData[k] = val
+            } else {
+                return nil
+            }
+        }
+        data = inputData
+    } else if config.Layers.Input.LayerType == "conv" {
+        if imageData, ok := inputValues["image"].([][]float64); ok {
+            data = imageData
+        } else {
+            return nil
+        }
+    } else if config.Layers.Input.LayerType == "lstm" {
+        if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
+            data = sequenceData
+        } else {
+            return nil
+        }
+    }
+
+    // Process hidden layers
+    for index, layer := range config.Layers.Hidden {
+        switch layer.LayerType {
+        case "dense":
+            data = processDenseLayer(layer, data)
+        case "conv":
+            data = processConvLayer(layer, data)
+        case "lstm":
+            data = processLSTMLayer(layer, data)
+        default:
+            // Handle error or default case
+        }
+
+        if hiddenLayer == index {
+            saveLayerDataToCSV(data, outputPath, index)
+        }
+    }
+
+    // Process output layer
+    outputLayer := config.Layers.Output
+    switch outputLayer.LayerType {
+    case "dense":
+        data = processDenseLayer(outputLayer, data)
+    case "conv":
+        data = processConvLayer(outputLayer, data)
+    case "lstm":
+        data = processLSTMLayer(outputLayer, data)
+    default:
+        // Handle error or default case
+    }
+
+    if outputData, ok := data.(map[string]float64); ok {
+        return outputData
+    } else {
+        return nil
+    }
+}
+
+// GetLastHiddenLayerIndex returns the index of the last hidden layer in the network configuration.
+func GetLastHiddenLayerIndex(config *NetworkConfig) int {
+    return len(config.Layers.Hidden) - 1
+}
+
+
 func processDenseLayer(layer Layer, inputData interface{}) interface{} {
 	// inputData is map[string]float64 or output from previous layer
 	var inputValues map[string]float64
