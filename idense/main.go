@@ -13,7 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	//"time"
+	"strings"
+	"time"
 )
 
 // MNISTImageData represents the structure of each entry in mnistData.json
@@ -31,6 +32,111 @@ type TopModel struct {
 
 var jsonFilePath string
 var mnistData []MNISTImageData
+
+
+// TestModelPerformance compares the performance of full model evaluation vs. saved layer state.
+func TestModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+    // Get the index of the last hidden layer
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+    fmt.Println("Starting full model evaluation...")
+    // Timing full model evaluation
+    startFullEval := time.Now()
+    fullEvalOutputs := make([]map[string]float64, len(testData))
+    
+    for i, data := range testData {
+        inputs := convertImageToInputs(data.FileName)
+        fullEvalOutputs[i] = dense.Feedforward(modelConfig, inputs)
+    }
+    durationFullEval := time.Since(startFullEval)
+    fmt.Printf("Full model evaluation took: %s\n", durationFullEval)
+
+    fmt.Println("Loading saved layer state...")
+    // No need to load the saved layer state here
+
+    fmt.Println("Starting evaluation from saved layer state...")
+    // Timing evaluation from the saved layer state
+    startSavedEval := time.Now()
+    savedEvalOutputs := make([]map[string]float64, len(testData))
+    for i := range testData {
+        inputID := fmt.Sprintf("%d", i)
+        savedLayerData := loadSavedLayerState(modelFilePath, layerStateNumber, inputID)
+        savedEvalOutputs[i] = runFromSavedLayer(modelConfig, savedLayerData, layerStateNumber)
+    }
+    durationSavedEval := time.Since(startSavedEval)
+    fmt.Printf("Evaluation from saved layer state took: %s\n", durationSavedEval)
+
+    // Compare outputs
+    consistent := true
+    for i := range testData {
+        fmt.Println(fullEvalOutputs[i], savedEvalOutputs[i])
+        if !compareOutputs(fullEvalOutputs[i], savedEvalOutputs[i]) {
+            fmt.Printf("Outputs differ at index %d!\n", i)
+            consistent = false
+            break
+        }
+    }
+
+    if consistent {
+        fmt.Println("All outputs are consistent!")
+    }
+}
+
+
+
+// runFullModelEvaluation runs the full model evaluation and returns the outputs.
+func runFullModelEvaluation(modelConfig *dense.NetworkConfig, testData []MNISTImageData) map[string]float64 {
+    fmt.Println("Running full model evaluation...")
+    correct := 0
+    for i, data := range testData {
+        inputs := convertImageToInputs(data.FileName)
+        outputPredicted := dense.Feedforward(modelConfig, inputs)
+        predictedLabel := getMaxIndex(outputPredicted)
+        if predictedLabel == data.Label {
+            correct++
+        }
+        if i%100 == 0 {
+            fmt.Printf("Processed %d/%d samples\n", i+1, len(testData))
+        }
+    }
+    accuracy := float64(correct) / float64(len(testData))
+    fmt.Printf("Full model accuracy: %.2f%%\n", accuracy*100)
+    return dense.Feedforward(modelConfig, convertImageToInputs(testData[0].FileName)) // Returning outputs for comparison
+}
+
+
+// loadSavedLayerState loads the saved layer state from the CSV file for a specific inputID.
+func loadSavedLayerState(modelFilePath string, layerStateNumber int, inputID string) interface{} {
+    dir, file := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+    layerCSVFilePath := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d.csv", layerStateNumber))
+
+    // Load CSV data here (this function should return the saved layer state as interface{} for further processing)
+    // You can adapt this function based on your CSV reading logic
+    savedLayerData := dense.LoadCSVLayerState(layerCSVFilePath, inputID)
+
+    return savedLayerData
+}
+
+
+// runFromSavedLayer runs the model evaluation starting from a saved layer state.
+func runFromSavedLayer(modelConfig *dense.NetworkConfig, savedLayerData interface{}, startLayer int) map[string]float64 {
+    return dense.ContinueFeedforward(modelConfig, savedLayerData, startLayer)
+}
+
+// compareOutputs compares the outputs of the full model evaluation and the saved layer state evaluation.
+func compareOutputs(output1, output2 map[string]float64) bool {
+    if len(output1) != len(output2) {
+        return false
+    }
+    for key, value1 := range output1 {
+        value2, exists := output2[key]
+        if !exists || math.Abs(value1-value2) > 1e-6 {
+            return false
+        }
+    }
+    return true
+}
 
 func main() {
 	fmt.Println("Starting CNN train and host")
@@ -94,6 +200,76 @@ func main() {
 	saveLayerStates(generationDir)
 
 
+	// Load model and test data here
+    modelConfig, err := loadModel("./host/generations/0/model_0.json")
+    if err != nil {
+        fmt.Println("Failed to load model:", err)
+        return
+    }
+
+    //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
+	CompareModelOutputs(modelConfig, mnistData[:5], "./host/generations/0/model_0.json")
+}
+
+// CompareModelOutputs compares the outputs of the full model and the model starting from the saved layer state
+// for the top N images in the MNIST dataset.
+func CompareModelOutputs(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+	// Get the index of the last hidden layer
+	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+	fmt.Println("Comparing outputs for the top", len(testData), "images.")
+
+	fullModelDurations := make([]time.Duration, len(testData))
+	savedStateDurations := make([]time.Duration, len(testData))
+	outputsMatch := true
+
+	for i, data := range testData {
+		inputs := convertImageToInputs(data.FileName)
+		inputID := fmt.Sprintf("%d", i)
+
+		// Run full model
+		startFull := time.Now()
+		fullOutput := dense.Feedforward(modelConfig, inputs)
+		fullModelDurations[i] = time.Since(startFull)
+
+		// Run model starting from saved layer state
+		// Load saved layer state for this input
+		savedLayerData := loadSavedLayerState(modelFilePath, layerStateNumber, inputID)
+		if savedLayerData == nil {
+			fmt.Printf("Saved layer data not found for input %s. Skipping.\n", inputID)
+			continue
+		}
+
+		startSaved := time.Now()
+		savedOutput := dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+		savedStateDurations[i] = time.Since(startSaved)
+		fmt.Println(fullOutput)
+		fmt.Println("----------")
+		fmt.Println(savedOutput)
+		// Compare outputs
+		if !compareOutputs(fullOutput, savedOutput) {
+			fmt.Printf("Outputs differ at index %d!\n", i)
+			outputsMatch = false
+		} else {
+			fmt.Printf("Outputs match for index %d.\n", i)
+		}
+	}
+
+	// Calculate total durations
+	var totalFullDuration, totalSavedDuration time.Duration
+	for i := range testData {
+		totalFullDuration += fullModelDurations[i]
+		totalSavedDuration += savedStateDurations[i]
+	}
+
+	fmt.Printf("Total time for full model evaluation: %s\n", totalFullDuration)
+	fmt.Printf("Total time for evaluation from saved layer state: %s\n", totalSavedDuration)
+
+	if outputsMatch {
+		fmt.Println("All outputs match!")
+	} else {
+		fmt.Println("There were mismatches in the outputs.")
+	}
 }
 
 
@@ -117,6 +293,11 @@ func saveLayerStates(generationDir string) {
         }
 
         for i := batchIndex; i < endIndex; i++ {
+
+			if filepath.Ext(files[i].Name()) != ".json" {
+                continue // Skip non-JSON files
+            }
+
             modelFilePath := filepath.Join(generationDir, files[i].Name())
 
             wg.Add(1)
@@ -224,17 +405,28 @@ func setupMNIST() {
 
 
 
-
-func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig,modelFilePath string) float64 {
+func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
     correct := 0
 
-	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
-	//fmt.Println("layerStateNumber",layerStateNumber)
+    // Get the index of the last hidden layer
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
-    for _, data := range testData {
-		//fmt.Println(index)
+    // Construct the file path for the layer state CSV file
+    dir, file := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+    layerCSVFilePath := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d.csv", layerStateNumber))
+
+    // Check if the layer state CSV file already exists
+    if _, err := os.Stat(layerCSVFilePath); err == nil {
+        fmt.Printf("Layer state file already exists for model: %s, skipping...\n", layerCSVFilePath)
+        return 0.0
+    }
+
+    // Proceed with the evaluation
+    for idx, data := range testData {
         inputs := convertImageToInputs(data.FileName) // Convert image to input values
-        outputPredicted := dense.FeedforwardLayerStateSaving(modelConfig, inputs,layerStateNumber,modelFilePath) // Get predicted outputs
+        inputID := fmt.Sprintf("%d", idx) // Use index as unique ID
+        outputPredicted := dense.FeedforwardLayerStateSaving(modelConfig, inputs, layerStateNumber, modelFilePath, inputID) // Get predicted outputs
 
         // Find the index of the maximum predicted value
         predictedLabel := getMaxIndex(outputPredicted)
@@ -255,6 +447,9 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig,m
 
     return accuracy
 }
+
+
+
 
 
 

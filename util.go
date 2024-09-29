@@ -113,8 +113,7 @@ func CreateDirectory(path string) error {
 	return nil
 }
 
-
-func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int) {
+func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int, inputID string) {
     // Extract the directory and the model file name without the extension
     dir, file := filepath.Split(modelFilePath)
     modelName := strings.TrimSuffix(file, filepath.Ext(file))
@@ -139,17 +138,17 @@ func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int) 
     // Write the data to the CSV file depending on its type
     switch v := data.(type) {
     case map[string]float64:
-        var record []string
         for key, value := range v {
-            record = append(record, key, strconv.FormatFloat(value, 'f', 6, 64))
+            record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
+            writer.Write(record)
         }
-        writer.Write(record)
 
     case [][]float64:
         for _, row := range v {
             var record []string
+            record = append(record, inputID) // Include inputID at the beginning
             for _, value := range row {
-                record = append(record, strconv.FormatFloat(value, 'f', 6, 64))
+                record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
             }
             writer.Write(record)
         }
@@ -158,12 +157,58 @@ func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int) 
         for _, image := range v {
             for _, row := range image {
                 var record []string
+                record = append(record, inputID) // Include inputID at the beginning
                 for _, value := range row {
-                    record = append(record, strconv.FormatFloat(value, 'f', 6, 64))
+                    record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
                 }
                 writer.Write(record)
             }
         }
     }
+}
+
+
+
+
+
+
+// LoadCSVLayerState loads the saved layer state for a specific inputID from a CSV file and returns it as a suitable data structure.
+func LoadCSVLayerState(filePath string, inputID string) interface{} {
+    // Open the CSV file
+    file, err := os.Open(filePath)
+    if err != nil {
+        panic(err)
+    }
+    defer file.Close()
+
+    // Create a new CSV reader
+    reader := csv.NewReader(file)
+
+    // Read all the data from the CSV file
+    records, err := reader.ReadAll()
+    if err != nil {
+        panic(err)
+    }
+
+    // Assuming the saved layer state is a map[string]float64, adapt as needed based on your data structure
+    savedLayerState := make(map[string]float64)
+
+    // Populate the map with the data from the CSV file corresponding to the inputID
+    for _, record := range records {
+        if len(record) >= 3 { // Assuming each record has inputID, key, and value
+            recordInputID := record[0]
+            if recordInputID != inputID {
+                continue // Skip records not matching the inputID
+            }
+            key := record[1]
+            value, err := strconv.ParseFloat(record[2], 64)
+            if err != nil {
+                panic(err)
+            }
+            savedLayerState[key] = value
+        }
+    }
+
+    return savedLayerState
 }
 
