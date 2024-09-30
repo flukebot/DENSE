@@ -213,7 +213,7 @@ func main() {
  
 	 // Test performance of the model using sharded layer states
 	 fmt.Println("Testing performance with sharded layer states...")
-	 TestShardedModelPerformanceMultithreaded(modelConfig, mnistData[:4799], "./host/generations/0/model_0.json")
+	 TestShardedModelPerformanceMultithreaded(modelConfig, mnistData[:40000], "./host/generations/0/model_0.json")
 
     //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
 	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
@@ -790,8 +790,8 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
         // Increment the wait group counter
         wg.Add(1)
 
-        // Launch a goroutine to process a batch of data
-        go func(testDataBatch []MNISTImageData) {
+        // Pass the 'start' index to the goroutine
+        go func(start int, testDataBatch []MNISTImageData) {
             defer wg.Done() // Decrement the wait group counter when done
 
             localCorrect := 0
@@ -799,7 +799,9 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
 
             for idx, data := range testDataBatch {
                 inputs := convertImageToInputs(data.FileName) // Convert image to input values
-                inputID := fmt.Sprintf("%d", idx)             // Use index as unique ID
+
+                // Adjust 'inputID' to be unique across all batches
+                inputID := fmt.Sprintf("%d", start+idx)
 
                 // Call the function to get the output and layer state
                 outputPredicted, layerState := dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath)
@@ -827,7 +829,7 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
                 shardDataBuffer[key] = value
             }
             bufferMu.Unlock()
-        }(testData[start:end])
+        }(start, testData[start:end])
     }
 
     // Wait for all goroutines to complete
@@ -848,6 +850,7 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
 
     return accuracy
 }
+
 
 
 
