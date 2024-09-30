@@ -212,3 +212,98 @@ func LoadCSVLayerState(filePath string, inputID string) interface{} {
     return savedLayerState
 }
 
+
+
+// SaveShardedLayerState saves the layer state for each input as a separate file (shard) in a dedicated folder.
+// SaveShardedLayerState saves the layer state for each input as a separate file (shard) in a dedicated folder.
+func SaveShardedLayerState(data interface{}, modelFilePath string, layerIndex int, inputID string) {
+    // Create a folder for storing shards for the given layer
+    dir, file := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+    layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
+    
+    // Create the directory if it doesn't exist
+    os.MkdirAll(layerShardFolder, os.ModePerm)
+
+    // Define the CSV file name for the specific input ID shard
+    fileName := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
+
+    // Save the state for this input to a CSV file
+    fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        panic(err)
+    }
+    defer fileHandle.Close()
+
+    writer := csv.NewWriter(fileHandle)
+    defer writer.Flush()
+
+    // Write data to the CSV file based on the type of `data`
+    switch v := data.(type) {
+    case map[string]float64:
+        for key, value := range v {
+            record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
+            writer.Write(record)
+        }
+
+    case [][]float64:
+        for _, row := range v {
+            var record []string
+            record = append(record, inputID)
+            for _, value := range row {
+                record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+            }
+            writer.Write(record)
+        }
+
+    case [][][]float64:
+        for _, image := range v {
+            for _, row := range image {
+                var record []string
+                record = append(record, inputID)
+                for _, value := range row {
+                    record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+                }
+                writer.Write(record)
+            }
+        }
+    }
+}
+
+
+// LoadShardedLayerState loads the saved layer state for a specific inputID shard from a CSV file.
+func LoadShardedLayerState(modelFilePath string, layerIndex int, inputID string) interface{} {
+    // Define the path to the shard for this input
+    dir, fileName := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+    layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
+    shardFilePath := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
+
+    // Open the shard file
+    fileHandle, err := os.Open(shardFilePath)
+    if err != nil {
+        panic(err)
+    }
+    defer fileHandle.Close()
+
+    reader := csv.NewReader(fileHandle)
+    records, err := reader.ReadAll()
+    if err != nil {
+        panic(err)
+    }
+
+    // Assuming the saved layer state is a map[string]float64
+    savedLayerState := make(map[string]float64)
+    for _, record := range records {
+        if len(record) >= 3 && record[0] == inputID {
+            key := record[1]
+            value, err := strconv.ParseFloat(record[2], 64)
+            if err != nil {
+                panic(err)
+            }
+            savedLayerState[key] = value
+        }
+    }
+
+    return savedLayerState
+}

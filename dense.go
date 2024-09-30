@@ -242,6 +242,76 @@ func FeedforwardLayerStateSaving(config *NetworkConfig, inputValues map[string]i
     }
 }
 
+// FeedforwardLayerStateSavingShard processes inputs through the network, saves the layer state as shards for the given layer, and returns the final output.
+func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, modelFilePath string, inputID string) map[string]float64 {
+    var data interface{}
+
+    // Load input values into the data variable
+    if config.Layers.Input.LayerType == "dense" {
+        // Input is dense
+        inputData := make(map[string]float64)
+        for k, v := range inputValues {
+            if val, ok := v.(float64); ok {
+                inputData[k] = val
+            } else {
+                return nil
+            }
+        }
+        data = inputData
+    } else if config.Layers.Input.LayerType == "conv" {
+        if imageData, ok := inputValues["image"].([][]float64); ok {
+            data = imageData
+        } else {
+            return nil
+        }
+    } else if config.Layers.Input.LayerType == "lstm" {
+        if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
+            data = sequenceData
+        } else {
+            return nil
+        }
+    }
+
+    // Process hidden layers
+    for index, layer := range config.Layers.Hidden {
+        switch layer.LayerType {
+        case "dense":
+            data = processDenseLayer(layer, data)
+        case "conv":
+            data = processConvLayer(layer, data)
+        case "lstm":
+            data = processLSTMLayer(layer, data)
+        default:
+            // Handle error or default case
+        }
+
+        // Save the layer state as shards if it's the target layer
+        if hiddenLayer == index {
+            SaveShardedLayerState(data, modelFilePath, index, inputID)
+        }
+    }
+
+    // Process output layer
+    outputLayer := config.Layers.Output
+    switch outputLayer.LayerType {
+    case "dense":
+        data = processDenseLayer(outputLayer, data)
+    case "conv":
+        data = processConvLayer(outputLayer, data)
+    case "lstm":
+        data = processLSTMLayer(outputLayer, data)
+    default:
+        // Handle error or default case
+    }
+
+    if outputData, ok := data.(map[string]float64); ok {
+        return outputData
+    } else {
+        return nil
+    }
+}
+
+
 // ContinueFeedforward continues the feedforward process from a specified layer with given input data.
 func ContinueFeedforward(config *NetworkConfig, inputData interface{}, startLayer int) map[string]float64 {
     var data interface{} = inputData
@@ -681,9 +751,8 @@ func CreateCustomNetworkConfig(numInputs, numFirstLayerNeurons, numOutputs int, 
 
 // AdjustOutputLayer dynamically sets the connections for the output layer based on the last hidden layer.
 func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
-    // Get the number of neurons in the last hidden layer
+    // Get the last hidden layer
     lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
-    numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
 
     // Define the output layer
     config.Layers.Output = Layer{
@@ -694,15 +763,20 @@ func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTy
     // Set up each neuron in the output layer with dynamic connections to the last hidden layer
     for i := 0; i < numOutputs; i++ {
         neuronID := "output" + strconv.Itoa(i)
-        activationType := "sigmoid" // Default activation function
+
+        // Set activation type (default to "sigmoid")
+        activationType := "sigmoid"
         if i < len(outputActivationTypes) {
             activationType = outputActivationTypes[i]
         }
 
+        // Create a neuron for the output layer
         config.Layers.Output.Neurons[neuronID] = Neuron{
             ActivationType: activationType,
             Connections: func() map[string]Connection {
                 connections := make(map[string]Connection)
+
+                // Connect to every neuron in the last hidden layer
                 for hiddenNeuronID := range lastHiddenLayer.Neurons {
                     connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
                 }
@@ -711,7 +785,12 @@ func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTy
             Bias: rand.Float64(),
         }
     }
+
+    // Optionally, if you need the number of neurons in the last hidden layer for logging or debugging:
+    numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
+    fmt.Printf("Number of neurons in the last hidden layer: %d\n", numLastHiddenNeurons)
 }
+
 
 
 

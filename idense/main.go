@@ -207,9 +207,213 @@ func main() {
         return
     }
 
+	 // Save sharded layer states for testing
+	 fmt.Println("Saving sharded layer states...")
+	 SaveShardedLayerStates(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
+ 
+	 // Test performance of the model using sharded layer states
+	 fmt.Println("Testing performance with sharded layer states...")
+	 TestShardedModelPerformance(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
+
     //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
-	CompareModelOutputs(modelConfig, mnistData[:5], "./host/generations/0/model_0.json")
+	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
 }
+
+
+// TestShardedModelPerformance compares the performance of full model evaluation vs. sharded layer state.
+func TestShardedModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+    fmt.Println("Starting full model evaluation...")
+    startFullEval := time.Now()
+    fullEvalOutputs := make([]map[string]float64, len(testData))
+
+    for i, data := range testData {
+        inputs := convertImageToInputs(data.FileName)
+        fullEvalOutputs[i] = dense.Feedforward(modelConfig, inputs)
+    }
+    durationFullEval := time.Since(startFullEval)
+    fmt.Printf("Full model evaluation took: %s\n", durationFullEval)
+
+    fmt.Println("Starting evaluation from sharded layer state...")
+    startSavedEval := time.Now()
+    savedEvalOutputs := make([]map[string]float64, len(testData))
+    for i := range testData {
+        inputID := fmt.Sprintf("%d", i)
+        savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerStateNumber, inputID)
+        savedEvalOutputs[i] = dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+    }
+    durationSavedEval := time.Since(startSavedEval)
+    fmt.Printf("Evaluation from sharded layer state took: %s\n", durationSavedEval)
+
+    consistent := true
+    for i := range testData {
+        if !compareOutputs(fullEvalOutputs[i], savedEvalOutputs[i]) {
+            fmt.Printf("Outputs differ at index %d!\n", i)
+            consistent = false
+            break
+        }
+    }
+
+    if consistent {
+        fmt.Println("All outputs are consistent!")
+    }
+}
+
+// SaveShardedLayerStates saves the layer states of the model in a sharded format.
+// SaveShardedLayerStates saves the layer states of the model in a sharded format.
+func SaveShardedLayerStates(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+    // Get the last hidden layer's index
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+    for i, data := range testData {
+        // Convert image to inputs
+        inputs := convertImageToInputs(data.FileName)
+
+        // Generate unique input ID (e.g., index of the test data)
+        inputID := fmt.Sprintf("%d", i)
+
+        // Call FeedforwardLayerStateSavingShard to process and save the layer states in shards
+        dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath, inputID)
+    }
+
+    fmt.Println("Sharded layer states have been saved.")
+}
+
+
+
+func CompareModelOutputsWithLoadTimesSingleLoad(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+    // Get the index of the last hidden layer
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+    fmt.Println("Comparing outputs for the top", len(testData), "images.")
+
+    fullModelDurations := make([]time.Duration, len(testData))
+    savedStateDurations := make([]time.Duration, len(testData))
+    loadStateDuration := time.Duration(0) // To track total loading time
+    outputsMatch := true
+
+    // Load saved layer states once (for all inputs)
+    savedLayerData := make(map[string]interface{}, len(testData))
+    startLoad := time.Now()
+    for i := range testData {
+        inputID := fmt.Sprintf("%d", i)
+        savedLayerData[inputID] = loadSavedLayerState(modelFilePath, layerStateNumber, inputID)
+    }
+    loadStateDuration = time.Since(startLoad)
+
+    for i, data := range testData {
+        inputs := convertImageToInputs(data.FileName)
+        inputID := fmt.Sprintf("%d", i)
+
+        // Run full model
+        startFull := time.Now()
+        fullOutput := dense.Feedforward(modelConfig, inputs)
+        fullModelDurations[i] = time.Since(startFull)
+
+        // Run model starting from saved layer state
+        startSaved := time.Now()
+        state := savedLayerData[inputID]
+        if state == nil {
+            fmt.Printf("Saved layer data not found for input %s. Skipping.\n", inputID)
+            continue
+        }
+        savedOutput := dense.ContinueFeedforward(modelConfig, state, layerStateNumber)
+        savedStateDurations[i] = time.Since(startSaved) // Only timing feedforward, not loading
+
+        fmt.Println(fullOutput)
+        fmt.Println("----------")
+        fmt.Println(savedOutput)
+        // Compare outputs
+        if !compareOutputs(fullOutput, savedOutput) {
+            fmt.Printf("Outputs differ at index %d!\n", i)
+            outputsMatch = false
+        } else {
+            fmt.Printf("Outputs match for index %d.\n", i)
+        }
+    }
+
+    // Calculate total durations
+    var totalFullDuration, totalSavedDuration time.Duration
+    for i := range testData {
+        totalFullDuration += fullModelDurations[i]
+        totalSavedDuration += savedStateDurations[i]
+    }
+
+    fmt.Printf("Total time for full model evaluation: %s\n", totalFullDuration)
+    fmt.Printf("Total time for evaluation from saved layer state (excluding load): %s\n", totalSavedDuration)
+    fmt.Printf("Total time spent loading layer states: %s\n", loadStateDuration)
+
+    if outputsMatch {
+        fmt.Println("All outputs match!")
+    } else {
+        fmt.Println("There were mismatches in the outputs.")
+    }
+}
+
+
+func CompareModelOutputsWithLoadTimes(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+	// Get the index of the last hidden layer
+	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+	fmt.Println("Comparing outputs for the top", len(testData), "images.")
+
+	fullModelDurations := make([]time.Duration, len(testData))
+	savedStateDurations := make([]time.Duration, len(testData))
+	outputsMatch := true
+
+	for i, data := range testData {
+		inputs := convertImageToInputs(data.FileName)
+		inputID := fmt.Sprintf("%d", i)
+
+		// Run full model
+		startFull := time.Now()
+		fullOutput := dense.Feedforward(modelConfig, inputs)
+		fullModelDurations[i] = time.Since(startFull)
+
+		// Run model starting from saved layer state
+		// Include the time to load the saved layer state
+		startSaved := time.Now()
+
+		// Load saved layer state for this input
+		savedLayerData := loadSavedLayerState(modelFilePath, layerStateNumber, inputID)
+		if savedLayerData == nil {
+			fmt.Printf("Saved layer data not found for input %s. Skipping.\n", inputID)
+			continue
+		}
+
+		savedOutput := dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+		savedStateDurations[i] = time.Since(startSaved) // This now includes the state loading time
+
+		fmt.Println(fullOutput)
+		fmt.Println("----------")
+		fmt.Println(savedOutput)
+		// Compare outputs
+		if !compareOutputs(fullOutput, savedOutput) {
+			fmt.Printf("Outputs differ at index %d!\n", i)
+			outputsMatch = false
+		} else {
+			fmt.Printf("Outputs match for index %d.\n", i)
+		}
+	}
+
+	// Calculate total durations
+	var totalFullDuration, totalSavedDuration time.Duration
+	for i := range testData {
+		totalFullDuration += fullModelDurations[i]
+		totalSavedDuration += savedStateDurations[i]
+	}
+
+	fmt.Printf("Total time for full model evaluation: %s\n", totalFullDuration)
+	fmt.Printf("Total time for evaluation from saved layer state (including load): %s\n", totalSavedDuration)
+
+	if outputsMatch {
+		fmt.Println("All outputs match!")
+	} else {
+		fmt.Println("There were mismatches in the outputs.")
+	}
+}
+
 
 // CompareModelOutputs compares the outputs of the full model and the model starting from the saved layer state
 // for the top N images in the MNIST dataset.
@@ -426,8 +630,8 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, 
     for idx, data := range testData {
         inputs := convertImageToInputs(data.FileName) // Convert image to input values
         inputID := fmt.Sprintf("%d", idx) // Use index as unique ID
-        outputPredicted := dense.FeedforwardLayerStateSaving(modelConfig, inputs, layerStateNumber, modelFilePath, inputID) // Get predicted outputs
-
+        //outputPredicted := dense.FeedforwardLayerStateSaving(modelConfig, inputs, layerStateNumber, modelFilePath, inputID) // Get predicted outputs
+		outputPredicted := dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath, inputID)
         // Find the index of the maximum predicted value
         predictedLabel := getMaxIndex(outputPredicted)
 
