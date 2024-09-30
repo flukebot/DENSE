@@ -535,7 +535,11 @@ func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []stri
 	// Generate and save models
 	for i := 0; i < numModels; i++ {
 		modelID := fmt.Sprintf("model_%d", i)
-		modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, modelID, projectName)
+		//modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, modelID, projectName)
+		
+		//firstLayerNeurons := 2 * inputSize // Double the number of input neurons
+		firstLayerNeurons := 128
+		modelConfig := dense.CreateCustomNetworkConfig(inputSize, firstLayerNeurons, outputSize, outputTypes, modelID, projectName)
 
 		// Serialize the model to JSON
 		modelFilePath := filepath.Join(modelDir, modelID+".json")

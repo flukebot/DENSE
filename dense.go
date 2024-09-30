@@ -606,6 +606,116 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 	return config
 }
 
+// CreateCustomNetworkConfig dynamically generates a network with specified input and output sizes,
+// allows dynamic configuration of the first layer's neurons, and the output neurons.
+func CreateCustomNetworkConfig(numInputs, numFirstLayerNeurons, numOutputs int, outputActivationTypes []string, modelID, projectName string) *NetworkConfig {
+    config := &NetworkConfig{
+        Metadata: ModelMetadata{
+            ModelID:             modelID,
+            ProjectName:         projectName,
+            LastTrainingAccuracy: 0.0,
+            LastTestAccuracy:     0.0,
+        },
+    }
+
+    // Define input layer with the specified number of input neurons
+    config.Layers.Input = Layer{
+        LayerType: "dense", // Or "conv" or "lstm" depending on the network
+        Neurons:   make(map[string]Neuron),
+    }
+    for i := 0; i < numInputs; i++ {
+        neuronID := "input" + strconv.Itoa(i)
+        config.Layers.Input.Neurons[neuronID] = Neuron{}
+    }
+
+    // Define the first hidden layer with the specified number of neurons
+    config.Layers.Hidden = []Layer{
+        {
+            LayerType: "dense",
+            Neurons:   make(map[string]Neuron),
+        },
+    }
+
+    for i := 0; i < numFirstLayerNeurons; i++ {
+        neuronID := "hidden1_neuron" + strconv.Itoa(i)
+        config.Layers.Hidden[0].Neurons[neuronID] = Neuron{
+            ActivationType: "relu",
+            Connections: func() map[string]Connection {
+                connections := make(map[string]Connection)
+                for j := 0; j < numInputs; j++ {
+                    connections["input"+strconv.Itoa(j)] = Connection{Weight: rand.Float64()}
+                }
+                return connections
+            }(),
+            Bias: rand.Float64(),
+        }
+    }
+
+    // Define output layer with customizable activation types, random weights, and biases
+    config.Layers.Output = Layer{
+        LayerType: "dense",
+        Neurons:   make(map[string]Neuron),
+    }
+    for i := 0; i < numOutputs; i++ {
+        neuronID := "output" + strconv.Itoa(i)
+        activationType := "sigmoid" // Default activation function
+        if i < len(outputActivationTypes) {
+            activationType = outputActivationTypes[i]
+        }
+
+        config.Layers.Output.Neurons[neuronID] = Neuron{
+            ActivationType: activationType,
+            Connections: func() map[string]Connection {
+                connections := make(map[string]Connection)
+                for hiddenNeuronID := range config.Layers.Hidden[0].Neurons {
+                    connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
+                }
+                return connections
+            }(),
+            Bias: rand.Float64(),
+        }
+    }
+
+    return config
+}
+
+// AdjustOutputLayer dynamically sets the connections for the output layer based on the last hidden layer.
+func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
+    // Get the number of neurons in the last hidden layer
+    lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+    numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
+
+    // Define the output layer
+    config.Layers.Output = Layer{
+        LayerType: "dense",
+        Neurons:   make(map[string]Neuron),
+    }
+
+    // Set up each neuron in the output layer with dynamic connections to the last hidden layer
+    for i := 0; i < numOutputs; i++ {
+        neuronID := "output" + strconv.Itoa(i)
+        activationType := "sigmoid" // Default activation function
+        if i < len(outputActivationTypes) {
+            activationType = outputActivationTypes[i]
+        }
+
+        config.Layers.Output.Neurons[neuronID] = Neuron{
+            ActivationType: activationType,
+            Connections: func() map[string]Connection {
+                connections := make(map[string]Connection)
+                for hiddenNeuronID := range lastHiddenLayer.Neurons {
+                    connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
+                }
+                return connections
+            }(),
+            Bias: rand.Float64(),
+        }
+    }
+}
+
+
+
+
 func RandomSlice(length int) []float64 {
 	slice := make([]float64, length)
 	for i := range slice {
