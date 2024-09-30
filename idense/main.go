@@ -551,8 +551,17 @@ func processModelEvalState(modelFilePath string) {
 
 	// Evaluate the model on the testing data
 	//fmt.Println("Evaluating the model...")
-	accuracy := evaluateModel(trainData, modelConfig,modelFilePath)
+	//accuracy := evaluateModel(trainData, modelConfig,modelFilePath)
+	accuracy := evaluateModelMultiThreaded(trainData, modelConfig,modelFilePath)
+	
 	fmt.Println("accuracy",accuracy)
+
+	modelConfig.Metadata.LastTestAccuracy = accuracy
+
+	// Save the mutated model back to the same file
+	if err := saveModel(modelFilePath, modelConfig); err != nil {
+		fmt.Println("failed to save mutated model %s: %w", modelFilePath, err)
+	}
 }
 
 //step 1-----------------------------
@@ -650,6 +659,86 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, 
     }
 
     return accuracy
+}
+
+func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
+	var correct int
+	var mu sync.Mutex // To protect the `correct` counter
+	var wg sync.WaitGroup
+
+	// Get the index of the last hidden layer
+	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+	// Construct the file path for the layer state CSV file
+	dir, file := filepath.Split(modelFilePath)
+	modelName := strings.TrimSuffix(file, filepath.Ext(file))
+	layerCSVFilePath := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d.csv", layerStateNumber))
+
+	// Check if the layer state CSV file already exists
+	if _, err := os.Stat(layerCSVFilePath); err == nil {
+		fmt.Printf("Layer state file already exists for model: %s, skipping...\n", layerCSVFilePath)
+		return 0.0
+	}
+
+	// Set up the number of goroutines (e.g., 10 workers)
+	numWorkers := 10
+	batchSize := len(testData) / numWorkers
+	if len(testData)%numWorkers != 0 {
+		batchSize++
+	}
+
+	// Loop through batches of data and assign each to a goroutine
+	for i := 0; i < numWorkers; i++ {
+		start := i * batchSize
+		end := start + batchSize
+		if end > len(testData) {
+			end = len(testData)
+		}
+		if start >= end {
+			break
+		}
+
+		// Increment the wait group counter
+		wg.Add(1)
+
+		// Launch a goroutine to process a batch of data
+		go func(testDataBatch []MNISTImageData) {
+			defer wg.Done() // Decrement the wait group counter when done
+
+			localCorrect := 0
+			for idx, data := range testDataBatch {
+				inputs := convertImageToInputs(data.FileName) // Convert image to input values
+				inputID := fmt.Sprintf("%d", idx)             // Use index as unique ID
+				outputPredicted := dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath, inputID)
+
+				// Find the index of the maximum predicted value
+				predictedLabel := getMaxIndex(outputPredicted)
+
+				// Compare with the actual label
+				if predictedLabel == data.Label {
+					localCorrect++
+				}
+			}
+
+			// Safely update the `correct` counter
+			mu.Lock()
+			correct += localCorrect
+			mu.Unlock()
+		}(testData[start:end])
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Calculate accuracy as the proportion of correct predictions
+	accuracy := float64(correct) / float64(len(testData))
+
+	// Ensure the returned accuracy is at least 0.1%
+	if accuracy < 0.001 {
+		accuracy = 0.001
+	}
+
+	return accuracy
 }
 
 
