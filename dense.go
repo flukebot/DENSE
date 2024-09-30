@@ -243,18 +243,17 @@ func FeedforwardLayerStateSaving(config *NetworkConfig, inputValues map[string]i
 }
 
 // FeedforwardLayerStateSavingShard processes inputs through the network, saves the layer state as shards for the given layer, and returns the final output.
-func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, modelFilePath string, inputID string) map[string]float64 {
+func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, modelFilePath string) (map[string]float64, interface{}) {
     var data interface{}
 
     // Load input values into the data variable
     if config.Layers.Input.LayerType == "dense" {
-        // Input is dense
         inputData := make(map[string]float64)
         for k, v := range inputValues {
             if val, ok := v.(float64); ok {
                 inputData[k] = val
             } else {
-                return nil
+                return nil, nil
             }
         }
         data = inputData
@@ -262,15 +261,17 @@ func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[str
         if imageData, ok := inputValues["image"].([][]float64); ok {
             data = imageData
         } else {
-            return nil
+            return nil, nil
         }
     } else if config.Layers.Input.LayerType == "lstm" {
         if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
             data = sequenceData
         } else {
-            return nil
+            return nil, nil
         }
     }
+
+    var layerState interface{}
 
     // Process hidden layers
     for index, layer := range config.Layers.Hidden {
@@ -282,12 +283,12 @@ func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[str
         case "lstm":
             data = processLSTMLayer(layer, data)
         default:
-            // Handle error or default case
+            return nil, nil
         }
 
         // Save the layer state as shards if it's the target layer
         if hiddenLayer == index {
-            SaveShardedLayerState(data, modelFilePath, index, inputID)
+            layerState = data
         }
     }
 
@@ -301,15 +302,18 @@ func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[str
     case "lstm":
         data = processLSTMLayer(outputLayer, data)
     default:
-        // Handle error or default case
+        return nil, nil
     }
 
+    // Return the output and the saved layer state
     if outputData, ok := data.(map[string]float64); ok {
-        return outputData
+        return outputData, layerState
     } else {
-        return nil
+        return nil, nil
     }
 }
+
+
 
 
 // ContinueFeedforward continues the feedforward process from a specified layer with given input data.

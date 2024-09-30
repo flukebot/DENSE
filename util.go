@@ -215,7 +215,6 @@ func LoadCSVLayerState(filePath string, inputID string) interface{} {
 
 
 // SaveShardedLayerState saves the layer state for each input as a separate file (shard) in a dedicated folder.
-// SaveShardedLayerState saves the layer state for each input as a separate file (shard) in a dedicated folder.
 func SaveShardedLayerState(data interface{}, modelFilePath string, layerIndex int, inputID string) {
     // Create a folder for storing shards for the given layer
     dir, file := filepath.Split(modelFilePath)
@@ -236,7 +235,6 @@ func SaveShardedLayerState(data interface{}, modelFilePath string, layerIndex in
     defer fileHandle.Close()
 
     writer := csv.NewWriter(fileHandle)
-    defer writer.Flush()
 
     // Write data to the CSV file based on the type of `data`
     switch v := data.(type) {
@@ -268,7 +266,16 @@ func SaveShardedLayerState(data interface{}, modelFilePath string, layerIndex in
             }
         }
     }
+
+    // Flush the writer to ensure everything is written properly, including newlines.
+    writer.Flush()
+
+    // Check for any error that occurred during writing or flushing
+    if err := writer.Error(); err != nil {
+        panic(err)
+    }
 }
+
 
 
 // LoadShardedLayerState loads the saved layer state for a specific inputID shard from a CSV file.
@@ -278,7 +285,7 @@ func LoadShardedLayerState(modelFilePath string, layerIndex int, inputID string)
     modelName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
     layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
     shardFilePath := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
-
+    //fmt.Println("shard",shardFilePath)
     // Open the shard file
     fileHandle, err := os.Open(shardFilePath)
     if err != nil {

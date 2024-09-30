@@ -46,8 +46,8 @@ func main() {
 	inputSize := 28 * 28               // Input size for MNIST data
 	outputSize := 10                   // Output size for MNIST digits (0-9)
 	outputTypes := []string{"softmax"} // Activation type for output layer
-	mnistDataFilePath := "./host/mnistData.json"
-	percentageTrain := 0.8
+	//mnistDataFilePath := "./host/mnistData.json"
+	//percentageTrain := 0.8
 	numModels := 100
 	generationNum := 500
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
@@ -86,7 +86,7 @@ func main() {
 	for i := 0; i <= generationNum; i++ {
 
 		// Define the directories for the current and next generation
-		currentGenDir := fmt.Sprintf("./host/generations/%d", i)
+		/*currentGenDir := fmt.Sprintf("./host/generations/%d", i)
 		nextGenDir := fmt.Sprintf("./host/generations/%d", i+1) // Increment for next generation
 
 		// Print the current generation number
@@ -106,11 +106,56 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error evolving models from generation %d to %d: %v", i, i+1, err)
 		}
-		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)
+		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)*/
+
+		TestLayerStateCache(generationDir,i, 10)
 	}
 
 	fmt.Println("Completed all generations.")
 
+}
+
+
+
+
+func TestLayerStateCache(generationDir string, generationNum int, topN int) {
+	fmt.Println("\n--- Testing Layer State Cache ---")
+
+	// Analyze layer hashes to find the top N most common sequences
+	topSequences, err := dense.AnalyzeLayerHashes(generationDir, topN)
+	if err != nil {
+		log.Fatalf("Failed to analyze layer hashes: %v", err)
+	}
+
+	// Display the top sequences
+	fmt.Printf("\nGeneration %d - Top %d Most Common Hidden Layer Sequences:\n", generationNum, topN)
+	for idx, seq := range topSequences {
+		fmt.Printf("%d. Count: %d\nSequence: %s\n\n", idx+1, seq.Count, seq.Hash)
+	}
+
+	// Construct a unique filename using the generation number
+	filename := fmt.Sprintf("./host/top_layer_sequences_gen%d.json", generationNum)
+
+	// Save the top sequences to the uniquely named file
+	saveTopSequences(topSequences, filename)
+}
+
+
+// saveTopSequences saves the top layer sequences to a JSON file for future use or analysis.
+func saveTopSequences(sequences []dense.LayerSequenceCount, filename string) {
+	data, err := json.MarshalIndent(sequences, "", "  ")
+	if err != nil {
+		log.Printf("Failed to marshal top sequences: %v", err)
+		return
+	}
+
+	err = ioutil.WriteFile(filename, data, 0644)
+	if err != nil {
+		log.Printf("Failed to save top sequences to file %s: %v", filename, err)
+		return
+	}
+
+	fmt.Printf("Top layer sequences saved to %s\n", filename)
 }
 
 //step 1-----------------------------
@@ -566,7 +611,7 @@ func processModel(modelFilePath, mnistDataFilePath string, percentageTrain float
 // Apply a random number of mutations to a model
 func applyRandomMutation(config *dense.NetworkConfig) {
 	mutations := []func(*dense.NetworkConfig){
-		func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.1, 20) },
+		/*func(c *dense.NetworkConfig) { dense.MutateCNNWeights(c, 0.1, 20) },
 		func(c *dense.NetworkConfig) { dense.MutateCNNBiases(c, 20, 0.1) },
 		func(c *dense.NetworkConfig) { dense.RandomizeCNNWeights(c, 20) },
 		func(c *dense.NetworkConfig) { dense.InvertCNNWeights(c, 20) },
@@ -574,11 +619,11 @@ func applyRandomMutation(config *dense.NetworkConfig) {
 		func(c *dense.NetworkConfig) { dense.MutateCNNFilterSize(c, 20) },       // Add mutation to CNN filter size
 		func(c *dense.NetworkConfig) { dense.MutateCNNStrideAndPadding(c, 20) }, // Add mutation to CNN stride and padding
 		func(c *dense.NetworkConfig) { dense.DuplicateCNNLayer(c, 20) },         // Add mutation to duplicate CNN layers
-		func(c *dense.NetworkConfig) { dense.AddMultipleCNNLayers(c, 20, 5) },   // Add multiple CNN layers
+		func(c *dense.NetworkConfig) { dense.AddMultipleCNNLayers(c, 20, 5) },   // Add multiple CNN layers*/
 
 
 		// FFNN mutations
-		func(c *dense.NetworkConfig) { dense.MutateWeights(c, 0.1, 20) },        // Mutate FFNN weights
+		/*func(c *dense.NetworkConfig) { dense.MutateWeights(c, 0.1, 20) },        // Mutate FFNN weights
 		func(c *dense.NetworkConfig) { dense.MutateBiases(c, 20, 0.1) },         // Mutate FFNN biases
 		func(c *dense.NetworkConfig) { dense.AddNeuron(c, 20) },                 // Add neuron to FFNN layer
 		func(c *dense.NetworkConfig) { dense.AddLayerFullConnections(c, 20) },   // Add fully connected FFNN layer
@@ -589,7 +634,40 @@ func applyRandomMutation(config *dense.NetworkConfig) {
 		func(c *dense.NetworkConfig) { dense.AddLayerRandomPosition(c, 20) },    // Add FFNN layer at random position
 		func(c *dense.NetworkConfig) { dense.ShuffleLayers(c, 20) },             // Shuffle layers in FFNN
 		func(c *dense.NetworkConfig) { dense.InvertWeights(c, 20) },             // Invert FFNN weights
-		func(c *dense.NetworkConfig) { dense.SplitNeuron(c, 20) },               // Split neuron in FFNN
+		func(c *dense.NetworkConfig) { dense.SplitNeuron(c, 20) },               // Split neuron in FFNN*/
+
+		 // FFNN mutations
+		 func(c *dense.NetworkConfig) { dense.MutateWeights(c, 0.1, 20) },              // Mutate FFNN weights
+		 func(c *dense.NetworkConfig) { dense.AddNeuron(c, 20) },                       // Add neuron to FFNN layer
+		 func(c *dense.NetworkConfig) { dense.AddLayerFullConnections(c, 20) },         // Add fully connected FFNN layer
+		 func(c *dense.NetworkConfig) { dense.AddLayer(c, 20) },                        // Add layer with sparse connections
+		 func(c *dense.NetworkConfig) { dense.AddLayerRandomPosition(c, 20) },          // Add FFNN layer at random position
+		 func(c *dense.NetworkConfig) { dense.MutateActivationFunctions(c, 20) },       // Mutate activation functions in FFNN
+		 func(c *dense.NetworkConfig) { dense.RemoveNeuron(c, 20) },                    // Remove neuron from FFNN layer
+		 func(c *dense.NetworkConfig) { dense.RemoveLayer(c, 20) },                     // Remove FFNN layer
+		 func(c *dense.NetworkConfig) { dense.DuplicateNeuron(c, 20) },                 // Duplicate neuron in FFNN layer
+		 func(c *dense.NetworkConfig) { dense.MutateBiases(c, 20, 0.1) },               // Mutate FFNN biases
+		 func(c *dense.NetworkConfig) { dense.RandomizeWeights(c, 20) },                // Randomize FFNN weights
+		 func(c *dense.NetworkConfig) { dense.SplitNeuron(c, 20) },                     // Split neuron in FFNN
+		 func(c *dense.NetworkConfig) { dense.SwapLayerActivations(c, 20) },            // Swap layer activations in FFNN
+		 func(c *dense.NetworkConfig) { dense.ShuffleLayerConnections(c, 20) },         // Shuffle connections within layers in FFNN
+		 func(c *dense.NetworkConfig) { dense.ShuffleLayers(c, 20) },                   // Shuffle layers in FFNN
+		 func(c *dense.NetworkConfig) { dense.AddMultipleLayers(c, 20) },               // Add multiple random layers to FFNN
+		 func(c *dense.NetworkConfig) { dense.DoubleLayers(c, 20) },                    // Double the number of layers in FFNN
+		 func(c *dense.NetworkConfig) { dense.MirrorLayersTopToBottom(c, 20) },         // Mirror layers from top to bottom in FFNN
+		 func(c *dense.NetworkConfig) { dense.MirrorEdgesSideToSide(c, 20) },           // Mirror connections in each layer from side to side
+		 func(c *dense.NetworkConfig) { dense.InvertWeights(c, 20) },                   // Invert weights in FFNN
+		 func(c *dense.NetworkConfig) { dense.InvertBiases(c, 20) },                    // Invert biases in FFNN
+		 func(c *dense.NetworkConfig) { dense.InvertActivationFunctions(c, 20) },       // Invert activation functions in FFNN
+		 func(c *dense.NetworkConfig) { dense.InvertConnections(c, 20) },               // Invert connections in FFNN
+	 
+		 // LSTM mutations
+		 func(c *dense.NetworkConfig) { dense.MutateLSTMCells(c, 20) },                 // Mutate LSTM cells
+		 func(c *dense.NetworkConfig) { dense.AddLSTMLayerAtRandomPosition(c, 20) },    // Add LSTM layer at random position
+		 func(c *dense.NetworkConfig) { dense.InvertLSTMWeights(c, 20) },               // Invert LSTM weights
+		 func(c *dense.NetworkConfig) { dense.RandomizeLSTMWeights(c, 20) },            // Randomize LSTM weights
+		 func(c *dense.NetworkConfig) { dense.MutateLSTMBiases(c, 20, 0.1) },           // Mutate LSTM biases
+		 func(c *dense.NetworkConfig) { dense.MutateLSTMWeights(c, 0.1, 20) },          // Mutate LSTM weights
 	}
 
 	// Select a random number of mutations between 1 and 5

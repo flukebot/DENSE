@@ -73,10 +73,11 @@ func InvertCNNWeights(config *NetworkConfig, mutationRate int) {
 func AddCNNLayerAtRandomPosition(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate {
         // Define possible filter sizes (e.g., 3x3, 5x5, 7x7, etc.)
-        filterSizes := []int{3, 5, 7, 11, 13}
+        //filterSizes := []int{3, 5, 7, 11, 13}
 
         // Randomly select a filter size from the list
-        randomFilterSize := filterSizes[rand.Intn(len(filterSizes))]
+        //randomFilterSize := filterSizes[rand.Intn(len(filterSizes))]
+        randomFilterSize := 3 + rand.Intn(1022)
 
         newLayer := Layer{
             LayerType: "conv",
@@ -144,11 +145,12 @@ func AddMultipleCNNLayers(config *NetworkConfig, mutationRate int, maxLayers int
         numLayers := rand.Intn(maxLayers) + 1 
 
         // Possible filter sizes to choose from
-        filterSizes := []int{3, 5, 7, 11, 13}
+        //filterSizes := []int{3, 5, 7, 11, 13}
         
         for i := 0; i < numLayers; i++ {
+            randomFilterSize := 3 + rand.Intn(1022)
             // Randomize filter size, stride, and padding for each layer
-            randomFilterSize := filterSizes[rand.Intn(len(filterSizes))]
+            //randomFilterSize := filterSizes[rand.Intn(len(filterSizes))]
             randomStride := rand.Intn(3) + 1   // Random stride between 1 and 3
             randomPadding := rand.Intn(2)      // Random padding between 0 and 1
 

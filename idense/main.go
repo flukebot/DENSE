@@ -208,12 +208,12 @@ func main() {
     }
 
 	 // Save sharded layer states for testing
-	 fmt.Println("Saving sharded layer states...")
-	 SaveShardedLayerStates(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
+	 //fmt.Println("Saving sharded layer states...")
+	 //SaveShardedLayerStates(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
  
 	 // Test performance of the model using sharded layer states
 	 fmt.Println("Testing performance with sharded layer states...")
-	 TestShardedModelPerformance(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
+	 TestShardedModelPerformanceMultithreaded(modelConfig, mnistData[:4799], "./host/generations/0/model_0.json")
 
     //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
 	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
@@ -260,25 +260,115 @@ func TestShardedModelPerformance(modelConfig *dense.NetworkConfig, testData []MN
     }
 }
 
-// SaveShardedLayerStates saves the layer states of the model in a sharded format.
-// SaveShardedLayerStates saves the layer states of the model in a sharded format.
-func SaveShardedLayerStates(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
-    // Get the last hidden layer's index
+func TestShardedModelPerformanceMultithreaded(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
     layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
-    for i, data := range testData {
-        // Convert image to inputs
-        inputs := convertImageToInputs(data.FileName)
+    // Prepare synchronization tools for multithreading
+    var wg sync.WaitGroup
+    var mu sync.Mutex // Mutex to protect shared resources
 
-        // Generate unique input ID (e.g., index of the test data)
-        inputID := fmt.Sprintf("%d", i)
+    fullEvalOutputs := make([]map[string]float64, len(testData))
+    savedEvalOutputs := make([]map[string]float64, len(testData))
 
-        // Call FeedforwardLayerStateSavingShard to process and save the layer states in shards
-        dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath, inputID)
+    fmt.Println("Starting full model evaluation...")
+
+    // Start timing for full evaluation
+    startFullEval := time.Now()
+
+    // Multithreaded Full Model Evaluation
+    numWorkers := 10
+    batchSize := len(testData) / numWorkers
+    if len(testData)%numWorkers != 0 {
+        batchSize++
     }
 
-    fmt.Println("Sharded layer states have been saved.")
+    // Launch goroutines for full evaluation
+    for i := 0; i < numWorkers; i++ {
+        start := i * batchSize
+        end := start + batchSize
+        if end > len(testData) {
+            end = len(testData)
+        }
+        if start >= end {
+            break
+        }
+
+        wg.Add(1)
+        go func(start, end int) {
+            defer wg.Done()
+            for j := start; j < end; j++ {
+                inputs := convertImageToInputs(testData[j].FileName)
+                result := dense.Feedforward(modelConfig, inputs)
+
+                // Use mutex to ensure thread-safe access to shared resources
+                mu.Lock()
+                fullEvalOutputs[j] = result
+                mu.Unlock()
+            }
+        }(start, end)
+    }
+
+    // Wait for full model evaluation to finish
+    wg.Wait()
+
+    durationFullEval := time.Since(startFullEval)
+    fmt.Printf("Full model evaluation took: %s\n", durationFullEval)
+
+    fmt.Println("Starting evaluation from sharded layer state...")
+
+    // Start timing for saved layer state evaluation
+    startSavedEval := time.Now()
+
+    // Multithreaded Saved Layer State Evaluation
+    for i := 0; i < numWorkers; i++ {
+        start := i * batchSize
+        end := start + batchSize
+        if end > len(testData) {
+            end = len(testData)
+        }
+        if start >= end {
+            break
+        }
+
+        wg.Add(1)
+        go func(start, end int) {
+            defer wg.Done()
+            for j := start; j < end; j++ {
+                inputID := fmt.Sprintf("%d", j)
+                savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerStateNumber, inputID)
+                result := dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+
+                // Use mutex to ensure thread-safe access to shared resources
+                mu.Lock()
+                savedEvalOutputs[j] = result
+                mu.Unlock()
+            }
+        }(start, end)
+    }
+
+    // Wait for saved layer state evaluation to finish
+    wg.Wait()
+
+    durationSavedEval := time.Since(startSavedEval)
+    fmt.Printf("Evaluation from sharded layer state took: %s\n", durationSavedEval)
+
+    // Compare the outputs to ensure consistency
+    consistent := true
+    for i := range testData {
+        if !compareOutputs(fullEvalOutputs[i], savedEvalOutputs[i]) {
+            fmt.Printf("Outputs differ at index %d!\n", i)
+            consistent = false
+            break
+        }
+    }
+
+    if consistent {
+        fmt.Println("All outputs are consistent!")
+    }
 }
+
+
+
 
 
 
@@ -536,32 +626,38 @@ func processModelEvalState(modelFilePath string) {
 	}
 
 
-	
-	
+	// Check if the model has already been evaluated
+	if modelConfig.Metadata.LastTestAccuracy > 0 {
+		log.Printf("Model %s has already been evaluated with accuracy: %.2f%%. Skipping mutation and evaluation.", modelFilePath, modelConfig.Metadata.LastTestAccuracy*100)
+	}else{
+		// Shuffle the data to ensure randomness
+		//rand.Shuffle(len(mnistData), func(i, j int) {
+		//	mnistData[i], mnistData[j] = mnistData[j], mnistData[i]
+		//})
+		percentageTrain := 0.8
+		// Split the data into training and testing sets
+		trainSize := int(percentageTrain * float64(len(mnistData)))
+		trainData := mnistData[:trainSize]
+		//testData := mnistData[trainSize:]
 
-	// Shuffle the data to ensure randomness
-	//rand.Shuffle(len(mnistData), func(i, j int) {
-	//	mnistData[i], mnistData[j] = mnistData[j], mnistData[i]
-	//})
-	percentageTrain := 0.8
-	// Split the data into training and testing sets
-	trainSize := int(percentageTrain * float64(len(mnistData)))
-	trainData := mnistData[:trainSize]
-	//testData := mnistData[trainSize:]
+		// Evaluate the model on the testing data
+		//fmt.Println("Evaluating the model...")
+		//accuracy := evaluateModel(trainData, modelConfig,modelFilePath)
+		accuracy := evaluateModelMultiThreaded(trainData, modelConfig,modelFilePath)
+		
+		fmt.Println("accuracy",accuracy)
 
-	// Evaluate the model on the testing data
-	//fmt.Println("Evaluating the model...")
-	//accuracy := evaluateModel(trainData, modelConfig,modelFilePath)
-	accuracy := evaluateModelMultiThreaded(trainData, modelConfig,modelFilePath)
-	
-	fmt.Println("accuracy",accuracy)
+		modelConfig.Metadata.LastTestAccuracy = accuracy
 
-	modelConfig.Metadata.LastTestAccuracy = accuracy
-
-	// Save the mutated model back to the same file
-	if err := saveModel(modelFilePath, modelConfig); err != nil {
-		fmt.Println("failed to save mutated model %s: %w", modelFilePath, err)
+		// Save the mutated model back to the same file
+		if err := saveModel(modelFilePath, modelConfig); err != nil {
+			fmt.Println("failed to save mutated model %s: %w", modelFilePath, err)
+		}
 	}
+	
+	
+
+	
 }
 
 //step 1-----------------------------
@@ -617,7 +713,7 @@ func setupMNIST() {
 
 
 
-
+/*
 func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
     correct := 0
 
@@ -659,87 +755,104 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, 
     }
 
     return accuracy
-}
+}*/
 
 func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
-	var correct int
-	var mu sync.Mutex // To protect the `correct` counter
-	var wg sync.WaitGroup
+    var correct int
+    var mu sync.Mutex // To protect the `correct` counter
+    var wg sync.WaitGroup
 
-	// Get the index of the last hidden layer
-	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+    // Buffer to store all shard data
+    var bufferMu sync.Mutex
+    shardDataBuffer := make(map[string]interface{})
 
-	// Construct the file path for the layer state CSV file
-	dir, file := filepath.Split(modelFilePath)
-	modelName := strings.TrimSuffix(file, filepath.Ext(file))
-	layerCSVFilePath := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d.csv", layerStateNumber))
+    // Get the index of the last hidden layer
+    layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
-	// Check if the layer state CSV file already exists
-	if _, err := os.Stat(layerCSVFilePath); err == nil {
-		fmt.Printf("Layer state file already exists for model: %s, skipping...\n", layerCSVFilePath)
-		return 0.0
-	}
+    // Set up the number of goroutines (e.g., 10 workers)
+    numWorkers := 10
+    batchSize := len(testData) / numWorkers
+    if len(testData)%numWorkers != 0 {
+        batchSize++
+    }
 
-	// Set up the number of goroutines (e.g., 10 workers)
-	numWorkers := 10
-	batchSize := len(testData) / numWorkers
-	if len(testData)%numWorkers != 0 {
-		batchSize++
-	}
+    // Loop through batches of data and assign each to a goroutine
+    for i := 0; i < numWorkers; i++ {
+        start := i * batchSize
+        end := start + batchSize
+        if end > len(testData) {
+            end = len(testData)
+        }
+        if start >= end {
+            break
+        }
 
-	// Loop through batches of data and assign each to a goroutine
-	for i := 0; i < numWorkers; i++ {
-		start := i * batchSize
-		end := start + batchSize
-		if end > len(testData) {
-			end = len(testData)
-		}
-		if start >= end {
-			break
-		}
+        // Increment the wait group counter
+        wg.Add(1)
 
-		// Increment the wait group counter
-		wg.Add(1)
+        // Launch a goroutine to process a batch of data
+        go func(testDataBatch []MNISTImageData) {
+            defer wg.Done() // Decrement the wait group counter when done
 
-		// Launch a goroutine to process a batch of data
-		go func(testDataBatch []MNISTImageData) {
-			defer wg.Done() // Decrement the wait group counter when done
+            localCorrect := 0
+            localShardData := make(map[string]interface{})
 
-			localCorrect := 0
-			for idx, data := range testDataBatch {
-				inputs := convertImageToInputs(data.FileName) // Convert image to input values
-				inputID := fmt.Sprintf("%d", idx)             // Use index as unique ID
-				outputPredicted := dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath, inputID)
+            for idx, data := range testDataBatch {
+                inputs := convertImageToInputs(data.FileName) // Convert image to input values
+                inputID := fmt.Sprintf("%d", idx)             // Use index as unique ID
 
-				// Find the index of the maximum predicted value
-				predictedLabel := getMaxIndex(outputPredicted)
+                // Call the function to get the output and layer state
+                outputPredicted, layerState := dense.FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath)
 
-				// Compare with the actual label
-				if predictedLabel == data.Label {
-					localCorrect++
-				}
-			}
+                // Save the layer state data into the local buffer
+                localShardData[inputID] = layerState
 
-			// Safely update the `correct` counter
-			mu.Lock()
-			correct += localCorrect
-			mu.Unlock()
-		}(testData[start:end])
-	}
+                // Find the index of the maximum predicted value
+                predictedLabel := getMaxIndex(outputPredicted)
 
-	// Wait for all goroutines to complete
-	wg.Wait()
+                // Compare with the actual label
+                if predictedLabel == data.Label {
+                    localCorrect++
+                }
+            }
 
-	// Calculate accuracy as the proportion of correct predictions
-	accuracy := float64(correct) / float64(len(testData))
+            // Safely update the `correct` counter and add the local shard data to the global buffer
+            mu.Lock()
+            correct += localCorrect
+            mu.Unlock()
 
-	// Ensure the returned accuracy is at least 0.1%
-	if accuracy < 0.001 {
-		accuracy = 0.001
-	}
+            // Store local shard data into the shared buffer
+            bufferMu.Lock()
+            for key, value := range localShardData {
+                shardDataBuffer[key] = value
+            }
+            bufferMu.Unlock()
+        }(testData[start:end])
+    }
 
-	return accuracy
+    // Wait for all goroutines to complete
+    wg.Wait()
+
+    // Now perform the actual file writes for all shard data
+    for inputID, shardData := range shardDataBuffer {
+        dense.SaveShardedLayerState(shardData, modelFilePath, layerStateNumber, inputID)
+    }
+
+    // Calculate accuracy as the proportion of correct predictions
+    accuracy := float64(correct) / float64(len(testData))
+
+    // Ensure the returned accuracy is at least 0.1%
+    if accuracy < 0.001 {
+        accuracy = 0.001
+    }
+
+    return accuracy
 }
+
+
+
+
+
 
 
 
