@@ -46,8 +46,8 @@ func main() {
 	inputSize := 28 * 28               // Input size for MNIST data
 	outputSize := 10                   // Output size for MNIST digits (0-9)
 	outputTypes := []string{"softmax"} // Activation type for output layer
-	//mnistDataFilePath := "./host/mnistData.json"
-	//percentageTrain := 0.8
+	mnistDataFilePath := "./host/mnistData.json"
+	percentageTrain := 0.8
 	numModels := 100
 	generationNum := 500
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
@@ -86,7 +86,7 @@ func main() {
 	for i := 0; i <= generationNum; i++ {
 
 		// Define the directories for the current and next generation
-		/*currentGenDir := fmt.Sprintf("./host/generations/%d", i)
+		currentGenDir := fmt.Sprintf("./host/generations/%d", i)
 		nextGenDir := fmt.Sprintf("./host/generations/%d", i+1) // Increment for next generation
 
 		// Print the current generation number
@@ -106,9 +106,9 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error evolving models from generation %d to %d: %v", i, i+1, err)
 		}
-		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)*/
+		fmt.Printf("Successfully evolved generation %d to %d.\n", i, i+1)
 
-		TestLayerStateCache(generationDir,i, 10)
+		//TestLayerStateCache(generationDir,i, 10)
 	}
 
 	fmt.Println("Completed all generations.")
