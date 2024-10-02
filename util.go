@@ -314,3 +314,44 @@ func LoadShardedLayerState(modelFilePath string, layerIndex int, inputID string)
 
     return savedLayerState
 }
+
+
+
+// CreateLearnedOrNotFolder creates the folder for learned or not tracking inside the model folder
+func CreateLearnedOrNotFolder(modelFilePath string, layerIndex int) string {
+    // Extract the directory and the model name without the extension
+    dir, file := filepath.Split(modelFilePath)
+    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+
+    // Create the folder path where the `learnedOrNot` files will be saved
+    learnedOrNotFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_learnedornot", layerIndex))
+
+    // Create the directory if it doesn't exist
+    err := os.MkdirAll(learnedOrNotFolder, os.ModePerm)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to create learnedOrNot folder: %v", err))
+    }
+
+    return learnedOrNotFolder
+}
+
+// SaveLearnedOrNot saves whether the input was correctly predicted (true/false) in the `learnedOrNot` folder
+func SaveLearnedOrNot(learnedOrNotFolder string, inputID string, isCorrect bool) {
+    var learnedFileName string
+
+    if isCorrect {
+        learnedFileName = fmt.Sprintf("input_%s_.true", inputID)
+    } else {
+        learnedFileName = fmt.Sprintf("input_%s_.false", inputID)
+    }
+
+    // Path for the learned or not file
+    filePath := filepath.Join(learnedOrNotFolder, learnedFileName)
+
+    // Write the result (true/false) to the file
+    content := strconv.FormatBool(isCorrect)
+    err := os.WriteFile(filePath, []byte(content), 0644)
+    if err != nil {
+        panic(fmt.Sprintf("Failed to write file %s: %v", filePath, err))
+    }
+}

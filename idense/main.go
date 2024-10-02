@@ -769,6 +769,10 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
     // Get the index of the last hidden layer
     layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
+	// Create the learnedOrNot folder inside the model directory
+	learnedOrNotFolder := dense.CreateLearnedOrNotFolder(modelFilePath, layerStateNumber)
+
+
     // Set up the number of goroutines (e.g., 10 workers)
     numWorkers := 10
     batchSize := len(testData) / numWorkers
@@ -796,6 +800,7 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
 
             localCorrect := 0
             localShardData := make(map[string]interface{})
+			localLearnedStatus := make(map[string]bool)
 
             for idx, data := range testDataBatch {
                 inputs := convertImageToInputs(data.FileName) // Convert image to input values
@@ -815,6 +820,9 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
                 // Compare with the actual label
                 if predictedLabel == data.Label {
                     localCorrect++
+                    localLearnedStatus[inputID] = true  // Prediction was correct
+                } else {
+                    localLearnedStatus[inputID] = false // Prediction was incorrect
                 }
             }
 
@@ -829,6 +837,12 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
                 shardDataBuffer[key] = value
             }
             bufferMu.Unlock()
+
+			// Save the learned status (true/false) for each inputID
+            for inputID, learnedStatus := range localLearnedStatus {
+                dense.SaveLearnedOrNot(learnedOrNotFolder, inputID, learnedStatus)
+            }
+
         }(start, testData[start:end])
     }
 
