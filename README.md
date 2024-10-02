@@ -2,14 +2,32 @@
 
 DENSE (Distributed Evolutionary Network Search Engine) is a Golang-based neural network library designed for flexibility and scalability. It combines elements of NEAT (NeuroEvolution of Augmenting Topologies), NAS (Neural Architecture Search), and Distributed NAS to create a powerful platform for neural network experimentation and development. The system is capable of running both natively and as WebAssembly, making it suitable for various environments, including the web.
 
-
 ![DENSE](./dense.png)
 
 ## Architectural Overview
 
-The architecture of DENSE was developed through a careful process of evaluating various programming languages and technologies, with the goal of achieving a balance between performance, ease of use, and compatibility with modern web technologies. Below is a detailed explanation of how the architecture was shaped
+The architecture of DENSE was developed through a careful process of evaluating various programming languages and technologies, with the goal of achieving a balance between performance, ease of use, and compatibility with modern web technologies. Below is a detailed explanation of how the architecture was shaped.
 
+![Exploration Path to GoWASM](./explorationPathToGoWASM.png)
 
+1. **Initial Considerations**: Python, JavaScript, Ruby, Java, and C# were considered but ultimately ruled out due to performance or complexity concerns. GoLang, combined with WebAssembly, emerged as the optimal choice for high performance and compatibility across platforms.
+   
+2. **Final Selection**: GoLang and WebAssembly provide the right balance of simplicity, concurrency support, and performance, enabling both server-side and in-browser execution of neural network operations.
+
+## New Diagram: Sharding and Future End-Goal
+
+To optimize processing time and scalability, DENSE incorporates **Layer Sharding**, a technique that splits network layers into shards for distributed processing. The updated architecture reflects the introduction of sharding into the mutation and training cycle, allowing networks to be evaluated and trained in parallel across multiple machines.
+
+![DENSE Sharding End Goal](./dense_sharding_end_goal.png)
+
+### Explanation of the New Diagram
+
+- **Sharding**: Layer sharding enables the distribution of neural network layers across machines, allowing parallel processing. This reduces computational overhead and speeds up model evaluation and training.
+- **Dynamic Evolution**: The system continuously evolves by using feedback from training to refine future network architectures.
+- **Distributed Collaboration**: Different nodes collaborate in evaluating and refining models, sharing progress to optimize the overall search.
+- **Real-Time Feedback**: Integrates real-time data during training, ensuring the model adapts dynamically to new inputs.
+
+---
 
 ## Progress Overview
 
@@ -48,124 +66,52 @@ The architecture of DENSE was developed through a careful process of evaluating 
 | **Distributed NAS**                | Implement parallel architecture search across multiple machines              | In Progress       | 60%          |
 | **Integration with Other Tools**   | API integrations for exporting/importing models to/from other ML frameworks  | Planned           | 0%           |
 
-
-# DENSE Diagram Elements Progress
-
-| Element                      | Description                                                                                          | Category                | Completion % |
-|-------------------------------|------------------------------------------------------------------------------------------------------|-------------------------|--------------|
-| **Distributed NAS**            | Distributed Neural Architecture Search, allowing parallel processing across multiple machines         | System Component        | 0%           |
-| **NAS**                        | Neural Architecture Search focused on finding optimal deep learning architectures                    | System Component        | 0%           |
-| **NEAT**                       | NeuroEvolution of Augmenting Topologies, evolving both network structure and weights                   | System Component        | 0%           |
-| **Search Space Definition**     | Defines the architecture search space, including layer types, nodes, and hyperparameters               | Search Process          | 0%           |
-| **Initialize Population**       | Initializes a population of architectures or networks from the defined search space                    | Search Process          | 0%           |
-| **Evaluate Fitness**            | Tests each network or architecture to assign a fitness score based on task performance                 | Evaluation Step         | 0%           |
-| **Distribute Search**           | Assigns architecture evaluations to different machines or computational nodes                         | Distributed Processing  | 0%           |
-| **Evaluate Fitness in Parallel**| Evaluates the fitness of architectures in parallel across distributed machines                         | Distributed Processing  | 0%           |
-| **Selection**                   | Selects the top-performing architectures or networks for the next generation                          | Selection Process       | 0%           |
-| **Search Strategy**             | Strategy used for exploration of the architecture space (e.g., reinforcement learning, evolution)     | Search Process          | 0%           |
-| **Mutation and Exploration**    | Introduces variations in architectures by mutating hyperparameters, layers, or nodes                   | Exploration Step        | 0%           |
-| **Crossover**                   | Combines the structure and weights of selected architectures to create new candidates                  | Genetic Algorithm Step  | 0%           |
-| **Mutation**                    | Introduces random changes in the structure, connections, or weights of architectures                   | Genetic Algorithm Step  | 0%           |
-| **Speciation**                  | Groups similar architectures into species to protect innovation and encourage diversity               | Evolutionary Step       | 0%           |
-| **Synchronization**             | Synchronizes the search results across machines or nodes after parallel evaluations                   | Distributed Processing  | 0%           |
-| **Final Training**              | Fully trains the selected architecture once the optimal one is found                                  | Training Step           | 0%           |
-| **Initialization**              | Starts with simple networks in the NEAT approach and progressively evolves more complex networks      | Evolutionary Step       | 0%           |
-
 ---
 
-### Explanation:
-
-- **System Components**: High-level elements like NAS, NEAT, and Distributed NAS that represent the overall system design and process.
-- **Search Process**: Steps related to initializing the architecture population, defining the search space, and exploring it.
-- **Evaluation Step**: Processes that evaluate and assign fitness scores to different architectures or networks.
-- **Distributed Processing**: Elements related to parallel evaluation and processing across multiple machines or nodes.
-- **Selection Process**: Steps involving choosing the best architectures for further exploration.
-- **Genetic Algorithm Step**: Processes like crossover and mutation that generate new architectures using genetic algorithms.
-- **Evolutionary Step**: Involves speciation, mutation, and progressively evolving networks in NEAT.
-- **Training Step**: Final step where the best architecture is fully trained.
-
----
-
-### Current Progress: 0%
-
-This table outlines all the key elements that need to be worked on, but no implementation has started yet. This is a full roadmap for the tasks required in building out the **DENSE** system.
-
-
-
-
-
-### Process of Elimination
-
-![Exploration Path to GoWASM](./explorationPathToGoWASM.png)
-
-1. **Initial Considerations**:
-   - **Python**: Known for its simplicity and extensive machine learning libraries, Python was initially considered. However, its slower execution speed and the overhead associated with interpreted languages made it less suitable for high-performance neural network operations in a web environment.
-   - **JavaScript**: Given its ubiquity in web development, JavaScript was another strong candidate. While it is versatile and runs natively in browsers, its performance limitations, particularly in computationally intensive tasks like neural networks, led to its exclusion.
-   - **Ruby**: Ruby's elegant and human-readable syntax was appealing, but it quickly became evident that its performance characteristics did not align with the demands of neural network processing.
-   - **Java**: Java's strong typing and robust ecosystem made it a potential candidate. However, its complexity and the heavier resource footprint were deemed unnecessary for the streamlined goals of this project.
-   - **C#**: Although C# offers enterprise-level features and is powerful in its own right, its complexity, particularly in cross-platform scenarios, made it less desirable.
-
-2. **Final Selection**:
-   - **GoLang**: After eliminating the other languages, GoLang emerged as the optimal choice. Its simple syntax, combined with performance close to that of C++, made it an excellent candidate. GoLang’s native support for concurrency and its ability to compile into WebAssembly further reinforced this decision, making it ideal for neural network operations that need to run efficiently both on the server and in the browser.
-   - **WebAssembly**: To leverage the power of GoLang in the web environment, WebAssembly was selected as the target compilation output. WebAssembly allows DENSE to run with near-native performance in web browsers, ensuring broad compatibility and efficient execution. Additionally, its potential for integration with WebGPU provides a clear path forward for future enhancements that will accelerate neural network computations using the GPU.
-
-### Current Features
+## Current Features
 
 - **Network Configuration**: 
-  - Define custom network architectures using input, hidden, and output layers.
-  - Support for various activation functions, including `ReLU`, `Sigmoid`, `Tanh`, `Softmax`, `Leaky ReLU`, `Swish`, `ELU`, `SELU`, and `Softplus`.
+  - Define custom network architectures with support for various activation functions.
+  
+- **Feedforward Propagation**: 
+  - Propagate inputs through the network to produce outputs.
 
-- **Network Operations**:
-  - **Feedforward Propagation**: Propagate inputs through the network to produce outputs.
-  - **Random Initialization**: Generate random weights and biases for network layers and neurons.
-  - **Mutation and Optimization**: Implement random hill climbing with mutation of weights, biases, and network architecture to optimize performance.
-  - **Error Evaluation**: Calculate the network's performance by comparing actual outputs against expected outputs using absolute error.
+- **Random Initialization**: 
+  - Generate random weights and biases for network layers and neurons.
 
 - **Training**:
-  - **Random Hill Climbing**: A simple optimization algorithm that iteratively mutates the network to find improved configurations.
+  - Simple hill climbing optimization through mutation of weights and biases.
+
+- **Sharding**:
+  - Split network layers into shards for distributed processing to reduce computation time.
 
 - **Persistence**:
-  - **Save and Load Network Configurations**: Serialize network configurations to JSON and load them back for further training or inference.
+  - Serialize network configurations to JSON and load them back for further training or inference.
 
 ## Future Features
 
 The following features are planned for future versions to enhance DENSE's capabilities and bring it closer to a comprehensive neural network framework:
 
-- **Advanced Optimizers**:
-  - Gradient-based optimizers like Stochastic Gradient Descent (SGD), Adam, and RMSprop.
-
-- **Custom Loss Functions**:
-  - Support for various loss functions, including Mean Squared Error (MSE), Cross-Entropy Loss, and Hinge Loss.
+- **Advanced Optimizers**: 
+  - SGD, Adam, RMSprop, and other gradient-based optimizers.
   
-- **Regularization Techniques**:
-  - Implement regularization methods like L1, L2, and dropout to prevent overfitting.
+- **Loss Functions**: 
+  - Custom loss functions including MSE and Cross-Entropy.
 
-- **Convolutional and Recurrent Layers**:
-  - Add support for Convolutional Neural Networks (CNNs) and Recurrent Neural Networks (RNNs) to handle image and sequence data.
+- **Convolutional Layers**: 
+  - Support for CNNs to handle image data.
 
-- **Backpropagation**:
-  - Implement backpropagation with automatic differentiation for efficient training of deep networks.
+- **Backpropagation**: 
+  - Implement backpropagation with automatic differentiation.
 
-- **Batch Processing**:
-  - Support for mini-batch gradient descent to speed up training and improve generalization.
+- **Transfer Learning**: 
+  - Allow fine-tuning of pre-trained models.
 
-- **Transfer Learning**:
-  - Allow pre-trained models to be loaded and fine-tuned on new tasks.
-
-- **Visualization Tools**:
-  - Integrate tools to visualize network architecture, training progress, and feature maps.
-
-- **WebAssembly Enhancements**:
-  - Optimize the WebAssembly output for better performance in the browser.
-  - Support for running trained models directly in the browser with WebGPU/WebGL acceleration.
-
-- **Integration with Other Tools**:
-  - Provide API integrations for exporting and importing models to/from other machine learning frameworks.
-  - Support for interoperability with common data formats like CSV, JSON, and TFRecord.
+- **WebAssembly Enhancements**: 
+  - Optimize WebAssembly output for faster model execution in the browser.
 
 ## Building and Running
 
-### /wasm
 To build the WebAssembly version of the neural network, use the following command:
 
 ```bash

@@ -286,6 +286,13 @@ func GenCycleLocalTesting(generationDir string) {
 					log.Fatal(err)
 				}
 				fmt.Println("Highest numbered folder:", highestFolder)
+				layerNum,_ := dense.ExtractDigitsToInt(highestFolder)
+				fmt.Println(layerNum)
+
+				layerOfNotLearned := filepath.Join(modelFilePathFolder, highestFolder)
+				lstEvalsTryingToLearn,_ := dense.GetFilesWithExtension(layerOfNotLearned,".false",10,false)
+				fmt.Println(lstEvalsTryingToLearn)
+
             }(modelFilePath)
         }
 

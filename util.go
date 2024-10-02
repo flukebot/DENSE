@@ -11,6 +11,9 @@ import (
     "strconv"
 	"strings"
 	"regexp"
+	"unicode"
+	"io"
+	//"sort"
 	//"syscall/js"
 )
 
@@ -341,9 +344,9 @@ func SaveLearnedOrNot(learnedOrNotFolder string, inputID string, isCorrect bool)
     var learnedFileName string
 
     if isCorrect {
-        learnedFileName = fmt.Sprintf("input_%s_.true", inputID)
+        learnedFileName = fmt.Sprintf("input_%s.true", inputID)
     } else {
-        learnedFileName = fmt.Sprintf("input_%s_.false", inputID)
+        learnedFileName = fmt.Sprintf("input_%s.false", inputID)
     }
 
     // Path for the learned or not file
@@ -389,4 +392,65 @@ func FindHighestNumberedFolder(dirPath, prefix, suffix string) (string, error) {
     }
 
     return highestFolder, nil
+}
+
+func ExtractDigitsToInt(s string) (int, error) {
+	var digits []rune
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			digits = append(digits, r)
+		}
+	}
+	if len(digits) == 0 {
+		return 0, fmt.Errorf("no digits found in the string")
+	}
+	numberStr := string(digits)
+	return strconv.Atoi(numberStr)
+}
+
+
+// GetFilesWithExtension returns the first x files with the given extension from the specified path.
+// If fullPath is true, it returns the full path, otherwise just the file name without the extension.
+func GetFilesWithExtension(path string, extension string, x int, fullPath bool) ([]string, error) {
+	// Slice to hold the results
+	var filesWithExtension []string
+
+	// Open the directory
+	dir, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+
+	// Iterate lazily through the directory entries
+	for {
+		// Read a small batch of filenames
+		names, err := dir.Readdirnames(100) // Reads 100 entries at a time
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		for _, name := range names {
+			if strings.HasSuffix(name, extension) {
+				if fullPath {
+					// Append full path
+					filesWithExtension = append(filesWithExtension, filepath.Join(path, name))
+				} else {
+					// Append just the file name without the extension
+					filesWithExtension = append(filesWithExtension, strings.TrimSuffix(name, filepath.Ext(name)))
+				}
+			}
+			// Stop once we reach the limit of x files
+			if len(filesWithExtension) >= x {
+				return filesWithExtension, nil
+			}
+		}
+
+		// If we reach EOF, stop
+		if err == io.EOF {
+			break
+		}
+	}
+
+	return filesWithExtension, nil
 }
