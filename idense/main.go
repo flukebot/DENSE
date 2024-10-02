@@ -199,25 +199,103 @@ func main() {
 
 	saveLayerStates(generationDir)
 
+	GenCycleLocalTesting(generationDir)
+
 
 	// Load model and test data here
-    modelConfig, err := loadModel("./host/generations/0/model_0.json")
-    if err != nil {
-        fmt.Println("Failed to load model:", err)
-        return
-    }
-
+    
 	 // Save sharded layer states for testing
 	 //fmt.Println("Saving sharded layer states...")
 	 //SaveShardedLayerStates(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
  
 	 // Test performance of the model using sharded layer states
-	 fmt.Println("Testing performance with sharded layer states...")
-	 TestShardedModelPerformanceMultithreaded(modelConfig, mnistData[:40000], "./host/generations/0/model_0.json")
+
+
 
     //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
 	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
 }
+
+func testPer(){
+	modelConfig, err := loadModel("./host/generations/0/model_0.json")
+    if err != nil {
+        fmt.Println("Failed to load model:", err)
+        return
+    }
+
+	 fmt.Println("Testing performance with sharded layer states...")
+	 TestShardedModelPerformanceMultithreaded(modelConfig, mnistData[:40000], "./host/generations/0/model_0.json")
+}
+
+//once built will cycle through 500 gens then build static mnist distributed version poc
+func GenCycleLocalTesting(generationDir string) {
+    files, err := ioutil.ReadDir(generationDir)
+    if err != nil {
+        fmt.Printf("Failed to read models directory: %v\n", err)
+        return
+    }
+
+    totalFiles := len(files)
+    batchSize := 2 // Number of models to process concurrently
+
+    var wg sync.WaitGroup
+    semaphore := make(chan struct{}, batchSize) // Semaphore to limit concurrency
+
+    for batchIndex := 0; batchIndex < totalFiles; batchIndex += batchSize {
+        endIndex := batchIndex + batchSize
+        if endIndex > totalFiles {
+            endIndex = totalFiles
+        }
+
+        for i := batchIndex; i < endIndex; i++ {
+
+			if filepath.Ext(files[i].Name()) != ".json" {
+                continue // Skip non-JSON files
+            }
+
+            modelFilePath := filepath.Join(generationDir, files[i].Name())
+			modelFilePathFolder := strings.TrimSuffix(modelFilePath, filepath.Ext(modelFilePath))
+
+            wg.Add(1)
+            semaphore <- struct{}{} // Acquire a slot in the semaphore
+
+            go func(modelFilePath string) {
+                defer wg.Done()
+                defer func() { <-semaphore }() // Release the semaphore when done
+
+                fmt.Printf("Processing model: %s\n", modelFilePath)
+                //processModelEvalState(modelFilePath)
+
+				//copyData, _ := json.Marshal(original)
+				// Create a static string
+				originalString := "Hello, World!"
+
+				// Copy the string to another variable
+				copiedString := originalString
+			
+				// Make some tweaks to the copied string
+				copiedString = strings.Replace(copiedString, "World", "Go", 1)
+			
+				// Print both strings to see the difference
+				fmt.Println("Original String:", originalString)
+				fmt.Println("Copied and Modified String:", copiedString)
+				fmt.Println(modelFilePathFolder)
+
+				highestFolder, err := dense.FindHighestNumberedFolder(modelFilePathFolder, "layer", "learnedornot")
+				if err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println("Highest numbered folder:", highestFolder)
+            }(modelFilePath)
+        }
+
+        // Wait for all goroutines in this batch to complete before moving to the next batch
+        wg.Wait()
+    }
+
+    fmt.Println("All models processed.")
+}
+
 
 
 // TestShardedModelPerformance compares the performance of full model evaluation vs. sharded layer state.

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
     "strconv"
 	"strings"
+	"regexp"
 	//"syscall/js"
 )
 
@@ -354,4 +355,38 @@ func SaveLearnedOrNot(learnedOrNotFolder string, inputID string, isCorrect bool)
     if err != nil {
         panic(fmt.Sprintf("Failed to write file %s: %v", filePath, err))
     }
+}
+
+
+
+func FindHighestNumberedFolder(dirPath, prefix, suffix string) (string, error) {
+    files, err := ioutil.ReadDir(dirPath)
+    if err != nil {
+        return "", err
+    }
+
+    highestNumber := -1
+    var highestFolder string
+
+    // Regular expression to match the folder names with the prefix, number, and suffix
+    re := regexp.MustCompile(fmt.Sprintf(`^%s_(\d+)_%s$`, prefix, suffix))
+
+    for _, file := range files {
+        if file.IsDir() {
+            matches := re.FindStringSubmatch(file.Name())
+            if len(matches) == 2 {
+                number, err := strconv.Atoi(matches[1])
+                if err == nil && number > highestNumber {
+                    highestNumber = number
+                    highestFolder = file.Name()
+                }
+            }
+        }
+    }
+
+    if highestNumber == -1 {
+        return "", fmt.Errorf("no folders found with prefix %s and suffix %s", prefix, suffix)
+    }
+
+    return highestFolder, nil
 }
