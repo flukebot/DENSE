@@ -81,6 +81,8 @@ func TestModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImag
     if consistent {
         fmt.Println("All outputs are consistent!")
     }
+
+	
 }
 
 
@@ -202,6 +204,7 @@ func main() {
 
 	GenCycleLocalTesting(generationDir)
 
+	//fmt.Println(mnistData[10007])
 
 	// Load model and test data here
     
@@ -311,14 +314,26 @@ func GenCycleLocalTesting(generationDir string) {
 						fmt.Println("Failed to load model:", err)
 					}else{
 						result := dense.ContinueFeedforward(modelConfig  , savedLayerData, layerNum)
-						fmt.Println(savedLayerData)
-						fmt.Println(result)
+						//fmt.Println(savedLayerData)
+						//fmt.Println(result)
+
+						predictedLabel := getMaxIndex(result)
+
+						// Compare with the actual label
+						if predictedLabel == mnistData[inputIDNumber].Label {
+                            fmt.Println("MATCH!!!")
+						}else{
+                            fmt.Println(predictedLabel)
+                            fmt.Println(mnistData[inputIDNumber].Label)
+                        }
+
+						//mnistData[10007])
 					}
 
 					
 				}
 
-            }(modelFilePath)
+            }(modelFilePath,modelFilePathFolder)
         }
 
         // Wait for all goroutines in this batch to complete before moving to the next batch
