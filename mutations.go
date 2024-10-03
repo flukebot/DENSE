@@ -285,6 +285,42 @@ func AddMultipleLayers(config *NetworkConfig, mutationRate int) {
     }
 }
 
+func AppendMultipleLayers(config *NetworkConfig, numNewLayers int, numNewNeurons int) {
+    rand.Seed(time.Now().UnixNano())
+        //numNewLayers := rand.Intn(5) + 1 // Add 1 to 5 layers randomly
+        for i := 0; i < numNewLayers; i++ {
+            newLayer := Layer{
+                Neurons: make(map[string]Neuron),
+            }
+
+            for j := 0; j < numNewNeurons; j++ {
+                neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
+                newNeuron := Neuron{
+                    ActivationType: randomActivationType(),
+                    Connections:    make(map[string]Connection),
+                    Bias:           rand.NormFloat64(),
+                }
+
+                // Connect the new neuron to the previous layer's neurons
+                var previousLayerNeurons map[string]Neuron
+                if len(config.Layers.Hidden) == 0 {
+                    previousLayerNeurons = config.Layers.Input.Neurons
+                } else {
+                    previousLayerNeurons = config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons
+                }
+                for prevNeuronID := range previousLayerNeurons {
+                    newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
+                }
+
+                // Add the new neuron to the layer
+                newLayer.Neurons[neuronID] = newNeuron
+            }
+
+            // Append the new layer to the hidden layers
+            config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+        }
+}
+
 // DoubleLayers duplicates the current layers in the network
 func DoubleLayers(config *NetworkConfig, mutationRate int) {
     if rand.Intn(100) < mutationRate {
@@ -645,6 +681,54 @@ func AddLayerFullConnections(config *NetworkConfig, mutationRate int) {
        //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
     }
 }
+
+// AddLayer adds a new hidden layer with random neurons to the network
+func AppendNewLayerFullConnections(config *NetworkConfig, numNewNeurons int) {
+        newLayer := Layer{
+            Neurons: make(map[string]Neuron),
+        }
+
+        for i := 0; i < numNewNeurons; i++ {
+            neuronID := fmt.Sprintf("neuron%d", len(newLayer.Neurons)+1)
+            newNeuron := Neuron{
+                ActivationType: randomActivationType(),
+                Connections:    make(map[string]Connection),
+                Bias:           rand.NormFloat64(),
+            }
+
+            // Connect the new neuron to the previous layer's neurons
+            var previousLayerNeurons map[string]Neuron
+            if len(config.Layers.Hidden) == 0 {
+                previousLayerNeurons = config.Layers.Input.Neurons
+            } else {
+                previousLayerNeurons = config.Layers.Hidden[len(config.Layers.Hidden)-1].Neurons
+            }
+            for prevNeuronID := range previousLayerNeurons {
+                newNeuron.Connections[prevNeuronID] = Connection{Weight: rand.NormFloat64()}
+            }
+
+            // Add the new neuron to the layer
+            newLayer.Neurons[neuronID] = newNeuron
+           //  fmt.Printf("Added neuron %s to new layer with connections to previous layer\n", neuronID)
+        }
+
+        // Connect the new layer's neurons to the output layer (or next hidden layer if one exists)
+        if len(config.Layers.Hidden) == 0 {
+           //  fmt.Println("Connecting new layer to the output layer directly")
+        }
+        //for outputNeuronID, outputNeuron := range config.Layers.Output.Neurons {
+        for _, outputNeuron := range config.Layers.Output.Neurons {
+            for newNeuronID := range newLayer.Neurons {
+                outputNeuron.Connections[newNeuronID] = Connection{Weight: rand.NormFloat64()}
+               //  fmt.Printf("Connecting new neuron %s to output neuron %s\n", newNeuronID, outputNeuronID)
+            }
+        }
+
+        // Append the new layer to the hidden layers
+        config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
+       //  fmt.Printf("Added a new hidden layer with %d neurons\n", numNewNeurons)
+}
+
 
 
 // AddLayer adds a new hidden layer with random sparse connections

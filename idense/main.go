@@ -15,6 +15,7 @@ import (
 	"sync"
 	"strings"
 	"time"
+	"strconv"
 )
 
 // MNISTImageData represents the structure of each entry in mnistData.json
@@ -292,6 +293,30 @@ func GenCycleLocalTesting(generationDir string) {
 				layerOfNotLearned := filepath.Join(modelFilePathFolder, highestFolder)
 				lstEvalsTryingToLearn,_ := dense.GetFilesWithExtension(layerOfNotLearned,".false",10,false)
 				fmt.Println(lstEvalsTryingToLearn)
+
+				//mutations to try against shards
+				//dense.AppendNewLayerFullConnections(config *NetworkConfig, numNewNeurons int)
+				//dense.AppendMultipleLayers(config *NetworkConfig, numNewLayers int, numNewNeurons int)
+
+				for indexShards, dataShard := range lstEvalsTryingToLearn {
+					fmt.Println(indexShards,dataShard)
+					fmt.Println(modelFilePathFolder + "/layer_" + strconv.Itoa(layerNum) + "_shards/" + dataShard + ".csv")
+
+					inputIDNumber,_ := dense.ExtractDigitsToInt(dataShard)
+					savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerNum, strconv.Itoa(inputIDNumber))
+                	
+
+					modelConfig, err := loadModel(modelFilePathFolder + ".json")
+					if err != nil {
+						fmt.Println("Failed to load model:", err)
+					}else{
+						result := dense.ContinueFeedforward(modelConfig  , savedLayerData, layerNum)
+						fmt.Println(savedLayerData)
+						fmt.Println(result)
+					}
+
+					
+				}
 
             }(modelFilePath)
         }
