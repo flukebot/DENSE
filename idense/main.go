@@ -9,7 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
-	//"math/rand"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sync"
@@ -263,7 +263,7 @@ func GenCycleLocalTesting(generationDir string) {
             wg.Add(1)
             semaphore <- struct{}{} // Acquire a slot in the semaphore
 
-            go func(modelFilePath string) {
+            go func(modelFilePath string, modelFilePathFolder string) {
                 defer wg.Done()
                 defer func() { <-semaphore }() // Release the semaphore when done
 
@@ -325,6 +325,8 @@ func GenCycleLocalTesting(generationDir string) {
 						}else{
                             fmt.Println(predictedLabel)
                             fmt.Println(mnistData[inputIDNumber].Label)
+
+                            ApplyMutations(modelFilePathFolder, inputIDNumber)
                         }
 
 						//mnistData[10007])
@@ -342,6 +344,171 @@ func GenCycleLocalTesting(generationDir string) {
 
     fmt.Println("All models processed.")
 }
+
+// ApplyMutations applies multiple mutations on the model, trying to improve accuracy.
+// It tries up to 10 mutations and stops if the prediction matches the actual label.
+func ApplyMutationsSingleThreaded(modelFilePathFolder string, inputIDNumber int) {
+    fmt.Println("Starting mutation attempts...")
+
+    
+
+    for i := 0; i < 10; i++ {
+        // Load the model configuration
+        modelConfig, err := loadModel(modelFilePathFolder + ".json")
+        if err != nil {
+            fmt.Println("Failed to load model:", err)
+            return
+        }
+        fmt.Printf("Iteration %d: Applying mutation...\n", i+1)
+
+        // Randomize the number of neurons or filter size (for CNN layers) between 10 and 128
+        numNewNeuronsOrFilters := rand.Intn(119) + 10
+
+        // Randomly choose between dense (FFNN), CNN, and LSTM mutation
+        mutationType := rand.Intn(6) // We have 6 mutation types to apply (2 for each layer type)
+
+        switch mutationType {
+        case 0:
+            // Apply a single dense layer mutation
+            //fmt.Printf("Appending a new dense layer with %d neurons.\n", numNewNeuronsOrFilters)
+            dense.AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+            
+        case 1:
+            // Apply multiple dense layers
+            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
+            //fmt.Printf("Appending %d new dense layers, each with %d neurons.\n", numNewLayers, numNewNeuronsOrFilters)
+            dense.AppendMultipleLayers(modelConfig, numNewLayers, numNewNeuronsOrFilters)
+            
+        case 2:
+            // Apply a single CNN layer mutation
+            //fmt.Printf("Appending a new CNN layer with filter size %d.\n", numNewNeuronsOrFilters)
+            dense.AddCNNLayerAtRandomPosition(modelConfig, numNewNeuronsOrFilters)
+            
+        case 3:
+            // Apply multiple CNN layers
+            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
+            //fmt.Printf("Appending %d new CNN layers, each with filter size %d.\n", numNewLayers, numNewNeuronsOrFilters)
+            dense.AddMultipleCNNLayers(modelConfig, 100, numNewLayers)
+            
+        case 4:
+            // Apply a single LSTM layer mutation
+            //fmt.Printf("Appending a new LSTM layer.\n")
+            dense.AddLSTMLayerAtRandomPosition(modelConfig, 100) // Assuming mutation rate of 100
+            
+        case 5:
+            // Apply multiple LSTM layers
+            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
+            //fmt.Printf("Appending %d new LSTM layers.\n", numNewLayers)
+            dense.AddMultipleLayers(modelConfig, numNewLayers) // Assuming the dense function for LSTM too
+        }
+
+        // Re-run the feedforward process to see if the mutation improves the model
+        inputs := convertImageToInputs(mnistData[inputIDNumber].FileName)
+        result := dense.Feedforward(modelConfig, inputs)
+        mutatedPredictedLabel := getMaxIndex(result)
+
+        //fmt.Printf("Mutated Prediction: %d | Actual Label: %d\n", mutatedPredictedLabel, mnistData[inputIDNumber].Label)
+
+        // Check if the mutated model has improved the prediction
+        if mutatedPredictedLabel == mnistData[inputIDNumber].Label {
+            fmt.Println("Match found after mutation!")
+            break // Stop early if a match is found
+        }
+    }
+
+    // Save the mutated model back to disk
+    /*if err := saveModel(modelFilePathFolder+".json", modelConfig); err != nil {
+        fmt.Println("Failed to save mutated model:", err)
+    }*/
+}
+
+func ApplyMutations(modelFilePathFolder string, inputIDNumber int) {
+    fmt.Println("Starting mutation attempts...")
+
+    var wg sync.WaitGroup    // WaitGroup to manage goroutines
+    var mu sync.Mutex        // Mutex to protect shared resources
+    mutationAttempts := 10   // Number of mutation attempts
+    var foundMatch bool      // Flag to track if we found a matching prediction
+
+    // Channel to capture the result
+    mutationResults := make(chan bool, mutationAttempts)
+
+    for i := 0; i < mutationAttempts; i++ {
+        wg.Add(1) // Increment WaitGroup counter
+
+        go func(iteration int) {
+            defer wg.Done() // Decrement WaitGroup counter when done
+
+            // Load the model configuration inside each goroutine
+            modelConfig, err := loadModel(modelFilePathFolder + ".json")
+            if err != nil {
+                fmt.Println("Failed to load model:", err)
+                return
+            }
+
+            // Randomize the number of neurons or filter size (for CNN layers) between 10 and 128
+            numNewNeuronsOrFilters := rand.Intn(119) + 10
+
+            // Randomly choose between dense (FFNN), CNN, and LSTM mutation
+            mutationType := rand.Intn(6) // 6 mutation types
+
+            // Apply the mutation based on type
+            switch mutationType {
+            case 0:
+                dense.AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+            case 1:
+                numNewLayers := rand.Intn(3) + 1
+                dense.AppendMultipleLayers(modelConfig, numNewLayers, numNewNeuronsOrFilters)
+            case 2:
+                dense.AddCNNLayerAtRandomPosition(modelConfig, numNewNeuronsOrFilters)
+            case 3:
+                numNewLayers := rand.Intn(3) + 1
+                dense.AddMultipleCNNLayers(modelConfig, 100, numNewLayers)
+            case 4:
+                dense.AddLSTMLayerAtRandomPosition(modelConfig, 100)
+            case 5:
+                numNewLayers := rand.Intn(3) + 1
+                dense.AddMultipleLayers(modelConfig, numNewLayers)
+            }
+
+            // Evaluate the mutated model
+            inputs := convertImageToInputs(mnistData[inputIDNumber].FileName)
+            result := dense.Feedforward(modelConfig, inputs)
+            mutatedPredictedLabel := getMaxIndex(result)
+
+            // If the prediction matches the actual label, mark the match
+            if mutatedPredictedLabel == mnistData[inputIDNumber].Label {
+                mu.Lock()
+                if !foundMatch { // Check and set foundMatch in a thread-safe manner
+                    foundMatch = true
+                    fmt.Printf("Match found on iteration %d\n", iteration)
+                }
+                mu.Unlock()
+                mutationResults <- true
+            } else {
+                mutationResults <- false
+            }
+
+        }(i)
+    }
+
+    // Wait for all goroutines to finish
+    wg.Wait()
+    close(mutationResults)
+
+    // Check if any of the mutations resulted in a match
+    for result := range mutationResults {
+        if result {
+            fmt.Println("Successful mutation found!")
+            break
+        }
+    }
+
+    fmt.Println("Mutation process complete.")
+}
+
+
+
 
 
 
