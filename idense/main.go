@@ -33,6 +33,7 @@ type TopModel struct {
 
 var jsonFilePath string
 var mnistData []MNISTImageData
+var testDataChunk  []MNISTImageData
 
 
 // TestModelPerformance compares the performance of full model evaluation vs. saved layer state.
@@ -202,8 +203,10 @@ func main() {
 
 	saveLayerStates(generationDir)
 
-	GenCycleLocalTesting(generationDir)
+    testDataChunk = mnistData[:40000]
 
+	GenCycleLocalTesting(generationDir)
+    //testPer()
 	//fmt.Println(mnistData[10007])
 
 	// Load model and test data here
@@ -395,7 +398,8 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
                 if !foundMatch { // Check and set foundMatch in a thread-safe manner
                     foundMatch = true
                     //fmt.Printf("Match found on iteration %d\n", iteration)
-                    mutatedAccuracy := EvaluateModelAccuracy(modelConfig, mnistData)
+                    //EvaluateModelAccuracyFromLayerState(layerStateNumber int,modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string)
+                    mutatedAccuracy := EvaluateModelAccuracyFromLayerState(layerNum,modelConfig, testDataChunk,modelFilePathFolder + ".json")
                     baselineAccuracy := modelConfig.Metadata.LastTestAccuracy
                     fmt.Printf("Old Accuracy: %.2f%%\n", baselineAccuracy*100)
                     fmt.Printf("New Accuracy: %.2f%%\n", mutatedAccuracy*100)
@@ -470,6 +474,110 @@ func EvaluateModelAccuracy(modelConfig *dense.NetworkConfig, testData []MNISTIma
     wg.Wait()
     accuracy := float64(correct) / float64(total)
     fmt.Printf("Model accuracy: %.2f%%\n", accuracy*100)
+    return accuracy
+}
+
+
+func EvaluateModelAccuracyFromLayerState(layerStateNumber int,modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) float64 {
+
+
+    numWorkers := 10
+    batchSize := len(testData) / numWorkers
+    if len(testData)%numWorkers != 0 {
+        batchSize++
+    }
+
+    // Prepare synchronization tools for multithreading
+    var wg sync.WaitGroup
+    var mu sync.Mutex // Mutex to protect shared resources
+
+    savedEvalOutputs := make([]map[string]float64, len(testData))
+
+    fmt.Println("Starting evaluation from sharded layer state...")
+
+    // Start timing for saved layer state evaluation
+    startSavedEval := time.Now()
+
+    // Multithreaded Saved Layer State Evaluation
+    for i := 0; i < numWorkers; i++ {
+        start := i * batchSize
+        end := start + batchSize
+        if end > len(testData) {
+            end = len(testData)
+        }
+        if start >= end {
+            break
+        }
+
+        wg.Add(1)
+        go func(start, end int) {
+            defer wg.Done()
+            for j := start; j < end; j++ {
+                inputID := fmt.Sprintf("%d", j)
+                savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerStateNumber, inputID)
+                if savedLayerData == nil {
+                    fmt.Printf("No saved layer data for input ID %s. Skipping.\n", inputID)
+                    continue
+                }
+                result := dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+
+                // Use mutex to ensure thread-safe access to shared resources
+                mu.Lock()
+                savedEvalOutputs[j] = result
+                mu.Unlock()
+            }
+        }(start, end)
+    }
+
+    // Wait for saved layer state evaluation to finish
+    wg.Wait()
+
+    // Stop timing for saved layer state evaluation
+    durationSavedEval := time.Since(startSavedEval)
+    fmt.Printf("Evaluation from sharded layer state took: %s\n", durationSavedEval)
+
+    // *** New Section: Counting Matches and Calculating Accuracy ***
+    accuracy := CalculateAccuracy(testData, savedEvalOutputs)
+
+    return accuracy
+}
+
+
+
+
+
+// CalculateAccuracy counts the number of correct predictions from savedEvalOutputs and calculates accuracy.
+// Parameters:
+// - testData: The MNIST test dataset.
+// - savedEvalOutputs: The slice containing the results from the saved layer state evaluations.
+// Returns:
+// - accuracy: The accuracy as a float64 value (0.0 to 1.0).
+func CalculateAccuracy(testData []MNISTImageData, savedEvalOutputs []map[string]float64) float64 {
+    correctMatches := 0
+    totalEvaluated := 0
+
+    for j, output := range savedEvalOutputs {
+        if output == nil {
+            continue // Skip if no evaluation was performed for this input
+        }
+
+        predictedLabel := getMaxIndex(output)
+
+        if predictedLabel == testData[j].Label {
+            correctMatches++
+        }
+
+        totalEvaluated++
+    }
+
+    var accuracy float64
+    if totalEvaluated > 0 {
+        accuracy = float64(correctMatches) / float64(totalEvaluated)
+    } else {
+        accuracy = 0.0 // Avoid division by zero
+    }
+
+    fmt.Printf("Saved layer state evaluation accuracy: %.2f%% (%d/%d)\n", accuracy*100, correctMatches, totalEvaluated)
     return accuracy
 }
 
