@@ -791,9 +791,43 @@ func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTy
     }
 
     // Optionally, if you need the number of neurons in the last hidden layer for logging or debugging:
-    numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
-    fmt.Printf("Number of neurons in the last hidden layer: %d\n", numLastHiddenNeurons)
+    //numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
+    //fmt.Printf("Number of neurons in the last hidden layer: %d\n", numLastHiddenNeurons)
 }
+
+// ReattachOutputLayer connects the output layer to the last hidden layer
+func ReattachOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
+    lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+
+    // Reset the output layer
+    config.Layers.Output = Layer{
+        LayerType: "dense",
+        Neurons:   make(map[string]Neuron),
+    }
+
+    for i := 0; i < numOutputs; i++ {
+        neuronID := fmt.Sprintf("output%d", i)
+        activationType := "softmax" // Default activation type; can be customized
+
+        if i < len(outputActivationTypes) {
+            activationType = outputActivationTypes[i]
+        }
+
+        connections := make(map[string]Connection)
+        for hiddenNeuronID := range lastHiddenLayer.Neurons {
+            connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5} // Initialize weights around 0
+        }
+
+        config.Layers.Output.Neurons[neuronID] = Neuron{
+            ActivationType: activationType,
+            Connections:    connections,
+            Bias:           rand.Float64() - 0.5, // Initialize biases around 0
+        }
+    }
+
+    //fmt.Println("Reattached output layer to the new last hidden layer.")
+}
+
 
 
 

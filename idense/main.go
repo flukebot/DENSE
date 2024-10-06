@@ -267,23 +267,10 @@ func GenCycleLocalTesting(generationDir string) {
                 defer wg.Done()
                 defer func() { <-semaphore }() // Release the semaphore when done
 
-                fmt.Printf("Processing model: %s\n", modelFilePath)
+                //fmt.Printf("Processing model: %s\n", modelFilePath)
                 //processModelEvalState(modelFilePath)
 
-				//copyData, _ := json.Marshal(original)
-				// Create a static string
-				originalString := "Hello, World!"
-
-				// Copy the string to another variable
-				copiedString := originalString
-			
-				// Make some tweaks to the copied string
-				copiedString = strings.Replace(copiedString, "World", "Go", 1)
-			
-				// Print both strings to see the difference
-				fmt.Println("Original String:", originalString)
-				fmt.Println("Copied and Modified String:", copiedString)
-				fmt.Println(modelFilePathFolder)
+				
 
 				highestFolder, err := dense.FindHighestNumberedFolder(modelFilePathFolder, "layer", "learnedornot")
 				if err != nil {
@@ -301,9 +288,9 @@ func GenCycleLocalTesting(generationDir string) {
 				//dense.AppendNewLayerFullConnections(config *NetworkConfig, numNewNeurons int)
 				//dense.AppendMultipleLayers(config *NetworkConfig, numNewLayers int, numNewNeurons int)
 
-				for indexShards, dataShard := range lstEvalsTryingToLearn {
-					fmt.Println(indexShards,dataShard)
-					fmt.Println(modelFilePathFolder + "/layer_" + strconv.Itoa(layerNum) + "_shards/" + dataShard + ".csv")
+				for _, dataShard := range lstEvalsTryingToLearn {
+					//fmt.Println(indexShards,dataShard)
+					//fmt.Println(modelFilePathFolder + "/layer_" + strconv.Itoa(layerNum) + "_shards/" + dataShard + ".csv")
 
 					inputIDNumber,_ := dense.ExtractDigitsToInt(dataShard)
 					savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerNum, strconv.Itoa(inputIDNumber))
@@ -323,10 +310,11 @@ func GenCycleLocalTesting(generationDir string) {
 						if predictedLabel == mnistData[inputIDNumber].Label {
                             fmt.Println("MATCH!!!")
 						}else{
-                            fmt.Println(predictedLabel)
-                            fmt.Println(mnistData[inputIDNumber].Label)
+                            //fmt.Println(predictedLabel)
+                            //fmt.Println(mnistData[inputIDNumber].Label)
 
-                            ApplyMutations(modelFilePathFolder, inputIDNumber)
+                            ApplyMutations(modelFilePathFolder, inputIDNumber, layerNum, savedLayerData)
+
                         }
 
 						//mnistData[10007])
@@ -345,89 +333,10 @@ func GenCycleLocalTesting(generationDir string) {
     fmt.Println("All models processed.")
 }
 
-// ApplyMutations applies multiple mutations on the model, trying to improve accuracy.
-// It tries up to 10 mutations and stops if the prediction matches the actual label.
-func ApplyMutationsSingleThreaded(modelFilePathFolder string, inputIDNumber int) {
-    fmt.Println("Starting mutation attempts...")
-
-    
-
-    for i := 0; i < 10; i++ {
-        // Load the model configuration
-        modelConfig, err := loadModel(modelFilePathFolder + ".json")
-        if err != nil {
-            fmt.Println("Failed to load model:", err)
-            return
-        }
-        fmt.Printf("Iteration %d: Applying mutation...\n", i+1)
-
-        // Randomize the number of neurons or filter size (for CNN layers) between 10 and 128
-        numNewNeuronsOrFilters := rand.Intn(119) + 10
-
-        // Randomly choose between dense (FFNN), CNN, and LSTM mutation
-        mutationType := rand.Intn(6) // We have 6 mutation types to apply (2 for each layer type)
-
-        switch mutationType {
-        case 0:
-            // Apply a single dense layer mutation
-            //fmt.Printf("Appending a new dense layer with %d neurons.\n", numNewNeuronsOrFilters)
-            dense.AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
-            
-        case 1:
-            // Apply multiple dense layers
-            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
-            //fmt.Printf("Appending %d new dense layers, each with %d neurons.\n", numNewLayers, numNewNeuronsOrFilters)
-            dense.AppendMultipleLayers(modelConfig, numNewLayers, numNewNeuronsOrFilters)
-            
-        case 2:
-            // Apply a single CNN layer mutation
-            //fmt.Printf("Appending a new CNN layer with filter size %d.\n", numNewNeuronsOrFilters)
-            dense.AddCNNLayerAtRandomPosition(modelConfig, numNewNeuronsOrFilters)
-            
-        case 3:
-            // Apply multiple CNN layers
-            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
-            //fmt.Printf("Appending %d new CNN layers, each with filter size %d.\n", numNewLayers, numNewNeuronsOrFilters)
-            dense.AddMultipleCNNLayers(modelConfig, 100, numNewLayers)
-            
-        case 4:
-            // Apply a single LSTM layer mutation
-            //fmt.Printf("Appending a new LSTM layer.\n")
-            dense.AddLSTMLayerAtRandomPosition(modelConfig, 100) // Assuming mutation rate of 100
-            
-        case 5:
-            // Apply multiple LSTM layers
-            numNewLayers := rand.Intn(3) + 1 // Random number of layers (1-3)
-            //fmt.Printf("Appending %d new LSTM layers.\n", numNewLayers)
-            dense.AddMultipleLayers(modelConfig, numNewLayers) // Assuming the dense function for LSTM too
-        }
-
-        // Re-run the feedforward process to see if the mutation improves the model
-        inputs := convertImageToInputs(mnistData[inputIDNumber].FileName)
-        result := dense.Feedforward(modelConfig, inputs)
-        mutatedPredictedLabel := getMaxIndex(result)
-
-        //fmt.Printf("Mutated Prediction: %d | Actual Label: %d\n", mutatedPredictedLabel, mnistData[inputIDNumber].Label)
-
-        // Check if the mutated model has improved the prediction
-        if mutatedPredictedLabel == mnistData[inputIDNumber].Label {
-            fmt.Println("Match found after mutation!")
-            break // Stop early if a match is found
-        }
-    }
-
-    // Save the mutated model back to disk
-    /*if err := saveModel(modelFilePathFolder+".json", modelConfig); err != nil {
-        fmt.Println("Failed to save mutated model:", err)
-    }*/
-}
-
-func ApplyMutations(modelFilePathFolder string, inputIDNumber int) {
-    fmt.Println("Starting mutation attempts...")
-
+func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int, savedLayerData interface{}) {
     var wg sync.WaitGroup    // WaitGroup to manage goroutines
     var mu sync.Mutex        // Mutex to protect shared resources
-    mutationAttempts := 10   // Number of mutation attempts
+    mutationAttempts := 100   // Number of mutation attempts
     var foundMatch bool      // Flag to track if we found a matching prediction
 
     // Channel to capture the result
@@ -471,17 +380,26 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int) {
                 dense.AddMultipleLayers(modelConfig, numNewLayers)
             }
 
-            // Evaluate the mutated model
-            inputs := convertImageToInputs(mnistData[inputIDNumber].FileName)
-            result := dense.Feedforward(modelConfig, inputs)
-            mutatedPredictedLabel := getMaxIndex(result)
+            // *** Reattach the output layer after applying mutations ***
+            numOutputs := 10 // Number of output neurons (for example, for classification of MNIST digits 0-9)
+            outputActivationTypes := []string{"softmax"} // Activation type for the output layer
+            dense.ReattachOutputLayer(modelConfig, numOutputs, outputActivationTypes)
 
+            // *** Continue the feedforward process from the saved layer state ***
+            result := dense.ContinueFeedforward(modelConfig, savedLayerData, layerNum)
+            mutatedPredictedLabel := getMaxIndex(result)
+            
             // If the prediction matches the actual label, mark the match
             if mutatedPredictedLabel == mnistData[inputIDNumber].Label {
                 mu.Lock()
                 if !foundMatch { // Check and set foundMatch in a thread-safe manner
                     foundMatch = true
-                    fmt.Printf("Match found on iteration %d\n", iteration)
+                    //fmt.Printf("Match found on iteration %d\n", iteration)
+                    mutatedAccuracy := EvaluateModelAccuracy(modelConfig, mnistData)
+                    baselineAccuracy := modelConfig.Metadata.LastTestAccuracy
+                    fmt.Printf("Old Accuracy: %.2f%%\n", baselineAccuracy*100)
+                    fmt.Printf("New Accuracy: %.2f%%\n", mutatedAccuracy*100)
+                    
                 }
                 mu.Unlock()
                 mutationResults <- true
@@ -500,12 +418,61 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int) {
     for result := range mutationResults {
         if result {
             fmt.Println("Successful mutation found!")
+           
             break
         }
     }
-
-    fmt.Println("Mutation process complete.")
 }
+
+
+// EvaluateModelAccuracy evaluates the model's accuracy on the entire test dataset.
+func EvaluateModelAccuracy(modelConfig *dense.NetworkConfig, testData []MNISTImageData) float64 {
+    var correct int
+    total := len(testData)
+    var mu sync.Mutex
+    var wg sync.WaitGroup
+
+    numWorkers := 10
+    batchSize := total / numWorkers
+    if total%numWorkers != 0 {
+        batchSize++
+    }
+
+    for i := 0; i < numWorkers; i++ {
+        start := i * batchSize
+        end := start + batchSize
+        if end > total {
+            end = total
+        }
+        if start >= end {
+            break
+        }
+
+        wg.Add(1)
+        go func(start, end int) {
+            defer wg.Done()
+            localCorrect := 0
+            for j := start; j < end; j++ {
+                data := testData[j]
+                inputs := convertImageToInputs(data.FileName)
+                output := dense.Feedforward(modelConfig, inputs)
+                predictedLabel := getMaxIndex(output)
+                if predictedLabel == data.Label {
+                    localCorrect++
+                }
+            }
+            mu.Lock()
+            correct += localCorrect
+            mu.Unlock()
+        }(start, end)
+    }
+
+    wg.Wait()
+    accuracy := float64(correct) / float64(total)
+    fmt.Printf("Model accuracy: %.2f%%\n", accuracy*100)
+    return accuracy
+}
+
 
 
 
