@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 	"strconv"
+    "github.com/google/uuid"
 )
 
 // MNISTImageData represents the structure of each entry in mnistData.json
@@ -167,7 +168,7 @@ func main() {
 	//mnistDataFilePath := "./host/mnistData.json"
 	//percentageTrain := 0.8
 	numModels := 10
-	//generationNum := 500
+	generationNum := 500
 	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
 
 
@@ -201,11 +202,19 @@ func main() {
 		fmt.Println("Generation folder already exists, skipping model generation.")
 	}
 
-	saveLayerStates(generationDir)
+
 
     testDataChunk = mnistData[:40000]
 
-	GenCycleLocalTesting(generationDir)
+    for i := 0; i <= generationNum; i++ {
+        generationDir := "./host/generations/" + strconv.Itoa(i)
+        fmt.Println("----CURENT GEN---", generationDir)
+        saveLayerStates(generationDir)
+	    GenCycleLocalTesting(generationDir,i)
+    }
+
+    //currentGeneration := 0
+	
     //testPer()
 	//fmt.Println(mnistData[10007])
 
@@ -235,12 +244,20 @@ func testPer(){
 }
 
 //once built will cycle through 500 gens then build static mnist distributed version poc
-func GenCycleLocalTesting(generationDir string) {
+func GenCycleLocalTesting(generationDir string,currentGeneration  int) {
+    
     files, err := ioutil.ReadDir(generationDir)
     if err != nil {
         fmt.Printf("Failed to read models directory: %v\n", err)
         return
     }
+
+    currentGeneration += 1
+
+    modelDir := "./host/generations/" + strconv.Itoa(currentGeneration)
+	if err := os.MkdirAll(modelDir, os.ModePerm); err != nil {
+		return 
+	}
 
     totalFiles := len(files)
     batchSize := 2 // Number of models to process concurrently
@@ -316,7 +333,7 @@ func GenCycleLocalTesting(generationDir string) {
                             //fmt.Println(predictedLabel)
                             //fmt.Println(mnistData[inputIDNumber].Label)
 
-                            ApplyMutations(modelFilePathFolder, inputIDNumber, layerNum, savedLayerData)
+                            ApplyMutations(modelFilePathFolder, inputIDNumber, layerNum, savedLayerData,modelDir)
 
                         }
 
@@ -336,7 +353,7 @@ func GenCycleLocalTesting(generationDir string) {
     fmt.Println("All models processed.")
 }
 
-func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int, savedLayerData interface{}) {
+func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int, savedLayerData interface{},modelDir string) {
     var wg sync.WaitGroup    // WaitGroup to manage goroutines
     var mu sync.Mutex        // Mutex to protect shared resources
     mutationAttempts := 100   // Number of mutation attempts
@@ -397,12 +414,24 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
                 mu.Lock()
                 if !foundMatch { // Check and set foundMatch in a thread-safe manner
                     foundMatch = true
+
+                    
                     //fmt.Printf("Match found on iteration %d\n", iteration)
                     //EvaluateModelAccuracyFromLayerState(layerStateNumber int,modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string)
                     mutatedAccuracy := EvaluateModelAccuracyFromLayerState(layerNum,modelConfig, testDataChunk,modelFilePathFolder + ".json")
                     baselineAccuracy := modelConfig.Metadata.LastTestAccuracy
-                    fmt.Printf("Old Accuracy: %.2f%%\n", baselineAccuracy*100)
-                    fmt.Printf("New Accuracy: %.2f%%\n", mutatedAccuracy*100)
+
+                    if mutatedAccuracy >  baselineAccuracy{
+                        fmt.Printf("Old Accuracy: %.2f%%\n", baselineAccuracy*100)
+                        fmt.Printf("New Accuracy: %.2f%%\n", mutatedAccuracy*100)
+                        id := uuid.New()
+                        fmt.Println(modelDir + "Generated UUID:", id.String())
+                        modelConfig.Metadata.LastTestAccuracy = mutatedAccuracy
+                        //SaveNetworkToFile(config *NetworkConfig, filename string)
+                        dense.SaveNetworkToFile(modelConfig,modelDir + "/" + id.String() + ".json")
+                    }
+
+                 
                     
                 }
                 mu.Unlock()
