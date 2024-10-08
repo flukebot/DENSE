@@ -32,6 +32,13 @@ type TopModel struct {
 	Path     string
 }
 
+type TopModel struct {
+    Config   *dense.NetworkConfig
+    Accuracy float64
+    Path     string
+}
+
+
 var jsonFilePath string
 var mnistData []MNISTImageData
 var testDataChunk  []MNISTImageData
@@ -212,6 +219,7 @@ func main() {
         saveLayerStates(generationDir)
 	    GenCycleLocalTesting(generationDir,i)
         dense.DeleteAllFolders(generationDir)
+        CreateNextGeneration(generationDir,numModels,i)
     }
 
     //currentGeneration := 0
@@ -231,6 +239,64 @@ func main() {
 
     //TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
 	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
+}
+
+func CreateNextGeneration(generationDir string, numModels int, genNum int) {
+    // Step 1: Get all .json model files in the directory
+    lstFiles, _ := dense.GetFilesWithExtension(generationDir, ".json", 1000, true)
+
+    // Step 2: Initialize a slice to hold models with their accuracy and paths
+    var models []TopModel
+
+    // Step 3: Loop through each model, load it, and get its accuracy
+    for _, modelPath := range lstFiles {
+        modelConfig, err := loadModel(modelPath)
+        if err != nil {
+            fmt.Printf("Failed to load model %s: %v\n", modelPath, err)
+            continue
+        }
+
+        // Assuming modelConfig.Metadata.LastTestAccuracy holds the accuracy
+        accuracy := modelConfig.Metadata.LastTestAccuracy
+
+        // Append the model data to the list
+        models = append(models, TopModel{
+            Config:   modelConfig,
+            Accuracy: accuracy,
+            Path:     modelPath,
+        })
+    }
+
+    // Step 4: Sort the models by accuracy in descending order
+    sort.Slice(models, func(i, j int) bool {
+        return models[i].Accuracy > models[j].Accuracy
+    })
+
+    // Step 5: Get the top 10 models
+    topModels := models
+    if len(models) > 10 {
+        topModels = models[:10]
+    }
+
+    // Step 6: Prepare the next generation directory
+    nextGenerationDir := fmt.Sprintf("./host/generations/%d", genNum+1)
+    if err := os.MkdirAll(nextGenerationDir, os.ModePerm); err != nil {
+        fmt.Printf("Failed to create next generation directory: %v\n", err)
+        return
+    }
+
+    // Step 7: Copy the top 10 models into the next generation directory with a UUID
+    for _, model := range topModels {
+        id := uuid.New() // Generate a new UUID
+        newModelPath := filepath.Join(nextGenerationDir, id.String()+".json")
+
+        // Save the model to the new path
+        if err := saveModel(newModelPath, model.Config); err != nil {
+            fmt.Printf("Failed to save model %s: %v\n", newModelPath, err)
+        } else {
+            fmt.Printf("Successfully saved top model to %s\n", newModelPath)
+        }
+    }
 }
 
 func testPer(){
@@ -253,12 +319,13 @@ func GenCycleLocalTesting(generationDir string,currentGeneration  int) {
         return
     }
 
-    currentGeneration += 1
+    _ = currentGeneration
+    /*currentGeneration += 1
 
     modelDir := "./host/generations/" + strconv.Itoa(currentGeneration)
 	if err := os.MkdirAll(modelDir, os.ModePerm); err != nil {
 		return 
-	}
+	}*/
 
     totalFiles := len(files)
     batchSize := 2 // Number of models to process concurrently
@@ -334,7 +401,7 @@ func GenCycleLocalTesting(generationDir string,currentGeneration  int) {
                             //fmt.Println(predictedLabel)
                             //fmt.Println(mnistData[inputIDNumber].Label)
 
-                            ApplyMutations(modelFilePathFolder, inputIDNumber, layerNum, savedLayerData,modelDir)
+                            ApplyMutations(modelFilePathFolder, inputIDNumber, layerNum, savedLayerData,generationDir)
 
                         }
 
