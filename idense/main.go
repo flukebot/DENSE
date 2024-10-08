@@ -211,6 +211,7 @@ func main() {
         fmt.Println("----CURENT GEN---", generationDir)
         saveLayerStates(generationDir)
 	    GenCycleLocalTesting(generationDir,i)
+        dense.DeleteAllFolders(generationDir)
     }
 
     //currentGeneration := 0

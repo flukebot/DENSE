@@ -454,3 +454,30 @@ func GetFilesWithExtension(path string, extension string, x int, fullPath bool) 
 
 	return filesWithExtension, nil
 }
+
+
+
+func DeleteAllFolders(dirPath string) error {
+	// Read the contents of the directory
+	items, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		return fmt.Errorf("error reading directory: %v", err)
+	}
+
+	for _, item := range items {
+		// Check if the item is a directory
+		if item.IsDir() {
+			// Get the full path of the directory
+			folderPath := filepath.Join(dirPath, item.Name())
+
+			// Remove the directory and its contents
+			err := os.RemoveAll(folderPath)
+			if err != nil {
+				return fmt.Errorf("error removing folder: %v", err)
+			}
+			fmt.Printf("Deleted folder: %s\n", folderPath)
+		}
+	}
+
+	return nil
+}
