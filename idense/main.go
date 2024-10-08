@@ -490,8 +490,8 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
                         fmt.Printf("New Accuracy: %.2f%%\n", mutatedAccuracy*100)
                         id := uuid.New()
                         fmt.Println(modelDir + "Generated UUID:", id.String())
-                        //modelConfig.Metadata.LastTestAccuracy = mutatedAccuracy
-                        modelConfig.Metadata.LastTestAccuracy = 0.0
+                        modelConfig.Metadata.LastTestAccuracy = mutatedAccuracy
+                        //modelConfig.Metadata.LastTestAccuracy = 0.0
                         //SaveNetworkToFile(config *NetworkConfig, filename string)
                         dense.SaveNetworkToFile(modelConfig,modelDir + "/" + id.String() + ".json")
                     }
