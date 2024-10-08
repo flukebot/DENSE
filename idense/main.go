@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 	"strconv"
+    "sort"
     "github.com/google/uuid"
 )
 
@@ -32,11 +33,6 @@ type TopModel struct {
 	Path     string
 }
 
-type TopModel struct {
-    Config   *dense.NetworkConfig
-    Accuracy float64
-    Path     string
-}
 
 
 var jsonFilePath string
