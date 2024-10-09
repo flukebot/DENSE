@@ -285,7 +285,7 @@ func CreateNextGeneration(generationDir string, numModels int, genNum int) {
     for _, model := range topModels {
         id := uuid.New() // Generate a new UUID
         newModelPath := filepath.Join(nextGenerationDir, id.String()+".json")
-
+        model.Config.Metadata.LastTestAccuracy = 0.0
         // Save the model to the new path
         if err := saveModel(newModelPath, model.Config); err != nil {
             fmt.Printf("Failed to save model %s: %v\n", newModelPath, err)
