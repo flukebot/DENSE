@@ -181,8 +181,7 @@ func main() {
 		fmt.Println("----CURENT GEN---", generationDir)
 
         dense.SaveLayerStates(generationDir,&testDataInterface,mnistDir)
-
-		//dense.SaveLayerStates(generationDir,1,trainData)
+        dense.EvaluateModelAccuracyFromLayerState(generationDir,&testDataInterface,mnistDir)
 		//GenCycleLocalTesting(generationDir, i)
 		//dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)

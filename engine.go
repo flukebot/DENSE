@@ -167,3 +167,103 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 
 
 
+func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string) {
+    files, err := ioutil.ReadDir(generationDir)
+    if err != nil {
+        fmt.Printf("Failed to read models directory: %v\n", err)
+        return
+    }
+
+    // Get the number of available CPU cores and create a semaphore based on this number
+    numCores := runtime.NumCPU()
+    semaphore := make(chan struct{}, numCores)
+
+    for _, value := range files {
+
+        if filepath.Ext(value.Name()) != ".json" {
+            continue // Skip non-JSON files
+        }
+
+        // Remove the file extension from the model file name
+        modelName := strings.TrimSuffix(value.Name(), filepath.Ext(value.Name()))
+
+        // Generate the full file path for LoadModel
+        filePath := filepath.Join(generationDir, value.Name())
+        fmt.Println("Evaluating Model:", modelName)
+
+        // Assuming LoadModel takes the full file path as an argument
+        modelConfig, err := LoadModel(filePath)
+        if err != nil {
+            fmt.Println("Failed to load model:", err)
+            return
+        }
+
+        layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+
+        // Construct the shard folder path inside the model's folder
+        modelFolderPath := filepath.Join(generationDir, modelName)
+        shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+
+        // Check if the shard folder for this layer already exists
+        if _, err := os.Stat(shardFolderPath); !os.IsNotExist(err) {
+            fmt.Printf("Shard folder for layer %d already exists in model %s, skipping...\n", layerStateNumber, modelName)
+            continue
+        }
+
+        // Create the shard folder if it doesn't exist
+        err = os.MkdirAll(shardFolderPath, os.ModePerm)
+        if err != nil {
+            fmt.Printf("Failed to create shard folder in model %s: %v\n", modelName, err)
+            continue
+        }
+
+        // WaitGroup to wait for all goroutines to finish
+        var wg sync.WaitGroup
+
+        // Loop through the data and launch a goroutine for each item
+        for _, v := range *data {
+            semaphore <- struct{}{} // Acquire a semaphore slot
+            wg.Add(1)
+
+            // Launch a goroutine for each data item
+            go func(d interface{}) {
+                defer wg.Done()
+                defer func() { <-semaphore }() // Release semaphore slot when done
+
+                //var inputs map[string]interface{}
+                var inputID string
+
+                // Handle the type of data with type assertion
+                switch d := d.(type) {
+                case ImageData:
+                    inputID = d.FileName
+                default:
+                    fmt.Printf("Unknown data type: %T\n", d)
+                    return
+                }
+
+                // Construct the path to check if the shard for this input already exists in the model's shard folder
+                shardFilePath := filepath.Join(shardFolderPath, fmt.Sprintf("input_%s.csv", inputID))
+
+                // Check if the shard already exists for this input
+                if _, err := os.Stat(shardFilePath); err == nil {
+                    fmt.Printf("Shard already exists for input %s, skipping...\n", inputID)
+                    return
+                }
+
+                // Run Feedforward and save the layer state if it doesn't exist
+                /*outputPredicted, layerState := FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, filePath)
+                _ = outputPredicted
+                SaveShardedLayerState(layerState, filePath, layerStateNumber, inputID)*/
+
+            }(v)
+        }
+
+        // Wait for all goroutines to finish
+        wg.Wait()
+    }
+
+    fmt.Println("All models Evaluated.")
+}
+
+
