@@ -9,6 +9,7 @@ import (
 	"sync"
 	"io/ioutil"
 	"runtime"
+	"strings"
 )
 
 type ImageData struct {
@@ -71,14 +72,18 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
     semaphore := make(chan struct{}, numCores)
 
     for _, value := range files {
-        
+
         if filepath.Ext(value.Name()) != ".json" {
             continue // Skip non-JSON files
         }
 
+        // Remove the file extension from the model file name
+        modelName := strings.TrimSuffix(value.Name(), filepath.Ext(value.Name()))
+
         // Generate the full file path for LoadModel
         filePath := filepath.Join(generationDir, value.Name())
-		fmt.Println("Model", value.Name())
+        fmt.Println("Processing Model:", modelName)
+
         // Assuming LoadModel takes the full file path as an argument
         modelConfig, err := LoadModel(filePath)
         if err != nil {
@@ -87,6 +92,23 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
         }
 
         layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+
+        // Construct the shard folder path inside the model's folder
+        modelFolderPath := filepath.Join(generationDir, modelName)
+        shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+
+        // Check if the shard folder for this layer already exists
+        if _, err := os.Stat(shardFolderPath); !os.IsNotExist(err) {
+            fmt.Printf("Shard folder for layer %d already exists in model %s, skipping...\n", layerStateNumber, modelName)
+            continue
+        }
+
+        // Create the shard folder if it doesn't exist
+        err = os.MkdirAll(shardFolderPath, os.ModePerm)
+        if err != nil {
+            fmt.Printf("Failed to create shard folder in model %s: %v\n", modelName, err)
+            continue
+        }
 
         // WaitGroup to wait for all goroutines to finish
         var wg sync.WaitGroup
@@ -114,8 +136,8 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
                     return
                 }
 
-                // Construct the path to check if the shard for this input already exists
-                shardFilePath := filepath.Join(filepath.Dir(filePath), fmt.Sprintf("layer_%d_shards", layerStateNumber), fmt.Sprintf("input_%s.csv", inputID))
+                // Construct the path to check if the shard for this input already exists in the model's shard folder
+                shardFilePath := filepath.Join(shardFolderPath, fmt.Sprintf("input_%s.csv", inputID))
 
                 // Check if the shard already exists for this input
                 if _, err := os.Stat(shardFilePath); err == nil {
@@ -137,6 +159,9 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 
     fmt.Println("All models processed.")
 }
+
+
+
 
 
 
