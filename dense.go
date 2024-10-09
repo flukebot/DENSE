@@ -52,6 +52,7 @@ type ModelMetadata struct {
 	ProjectName         string  `json:"projectName"`
 	LastTrainingAccuracy float64 `json:"lastTrainingAccuracy"`
 	LastTestAccuracy     float64 `json:"lastTestAccuracy"`
+	Path     			string `json:"path"`
 }
 
 // NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers, and model metadata.

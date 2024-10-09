@@ -98,6 +98,37 @@ func SaveNetworkToFile(config *NetworkConfig, filename string) error {
 	return err
 }
 
+// Save a model to a file
+func SaveModel(filePath string, modelConfig *NetworkConfig) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create model file: %w", err)
+	}
+	defer file.Close()
+
+	if err := json.NewEncoder(file).Encode(modelConfig); err != nil {
+		return fmt.Errorf("failed to encode model: %w", err)
+	}
+
+	return nil
+}
+
+// Load a model from a file
+func LoadModel(filePath string) (*NetworkConfig, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open model file: %w", err)
+	}
+	defer file.Close()
+
+	var modelConfig NetworkConfig
+	if err := json.NewDecoder(file).Decode(&modelConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode model: %w", err)
+	}
+
+	return &modelConfig, nil
+}
+
 // Check if a directory exists
 func CheckDirExists(dirPath string) bool {
 	if _, err := os.Stat(dirPath); os.IsNotExist(err) {

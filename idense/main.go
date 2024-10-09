@@ -21,11 +21,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// MNISTImageData represents the structure of each entry in mnistData.json
-type MNISTImageData struct {
-	FileName string `json:"file_name"`
-	Label    int    `json:"label"`
-}
 
 // TopModel represents a model and its accuracy
 type TopModel struct {
@@ -35,11 +30,11 @@ type TopModel struct {
 }
 
 var jsonFilePath string
-var mnistData []MNISTImageData
-var testDataChunk []MNISTImageData
+var mnistData []dense.ImageData
+var testDataChunk []dense.ImageData
 
 // TestModelPerformance compares the performance of full model evaluation vs. saved layer state.
-func TestModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func TestModelPerformance(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	// Get the index of the last hidden layer
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
@@ -88,7 +83,7 @@ func TestModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImag
 }
 
 // runFullModelEvaluation runs the full model evaluation and returns the outputs.
-func runFullModelEvaluation(modelConfig *dense.NetworkConfig, testData []MNISTImageData) map[string]float64 {
+func runFullModelEvaluation(modelConfig *dense.NetworkConfig, testData []dense.ImageData) map[string]float64 {
 	fmt.Println("Running full model evaluation...")
 	correct := 0
 	for i, data := range testData {
@@ -160,51 +155,41 @@ func main() {
 	outputTypes := []string{"softmax"} // Activation type for output layer
 	//mnistDataFilePath := "./host/mnistData.json"
 	//percentageTrain := 0.8
-	numModels := 10
+	numModels := 2
 	generationNum := 500
-	/*modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, "id1", projectName)
-
-
-
-
-	// Define the path to the MNIST data JSON file
-
-
-	// Train and evaluate the model using 80% of the data for training
-	accuracy, err := EvaluateModel(jsonFilePath, modelConfig, 0.8)
-	if err != nil {
-		log.Fatalf("Failed to train and evaluate model: %v", err)
-	}
-
-	// Display the model accuracy
-	fmt.Printf("Model accuracy: %.2f%%\n", accuracy*100)*/
-
-	// Check if the generation folder exists, and generate models if it doesn't
-	generationDir := "./host/generations/0"
-	if !dense.CheckDirExists(generationDir) {
-		fmt.Println("Generation folder doesn't exist, generating models.")
-		// Number of models to generate
-
-		// Generate the models and save them to host/generations/0
-		if err := GenerateModels(numModels, inputSize, outputSize, outputTypes, projectName); err != nil {
-			log.Fatalf("Failed to generate models: %v", err)
-		}
-		fmt.Println("Model generation complete.")
-
-	} else {
-		fmt.Println("Generation folder already exists, skipping model generation.")
-	}
+    projectPath := "./host/generations/"
+    
+    dense.GenerateModelsIfNotExist(projectPath + "0", numModels, inputSize, outputSize, outputTypes, projectName)
 
 	testDataChunk = mnistData[:40000]
 
+    percentageTrain := 0.8
+	// Split the data into training and testing sets
+    trainSize := int(percentageTrain * float64(len(mnistData)))
+    trainData := mnistData[:trainSize]
+
+    // Create a new slice of type []interface{}
+    testDataInterface := make([]interface{}, len(trainData))
+
+    // Convert each element from []dense.ImageData to []interface{}
+    for i, data := range trainData {
+        testDataInterface[i] = data
+    }
+
 	for i := 0; i <= generationNum; i++ {
-		generationDir = "./host/generations/" + strconv.Itoa(i)
+		generationDir := "./host/generations/" + strconv.Itoa(i)
 		fmt.Println("----CURENT GEN---", generationDir)
-		saveLayerStates(generationDir)
-		GenCycleLocalTesting(generationDir, i)
-		dense.DeleteAllFolders(generationDir)
-		CreateNextGeneration(generationDir, numModels, i)
+
+        dense.SaveLayerStates(generationDir,&testDataInterface,mnistDir)
+
+		//dense.SaveLayerStates(generationDir,1,trainData)
+		//GenCycleLocalTesting(generationDir, i)
+		//dense.DeleteAllFolders(generationDir)
+		//CreateNextGeneration(generationDir, numModels, i)
+        break
 	}
+
+    return
 
 	//currentGeneration := 0
 
@@ -232,7 +217,7 @@ func CreateNextGeneration(generationDir string, numModels int, genNum int) {
 
 	// Step 3: Loop through each model, load it, and get its accuracy
 	for _, modelPath := range lstFiles {
-		modelConfig, err := loadModel(modelPath)
+		modelConfig, err := dense.LoadModel(modelPath)
 		if err != nil {
 			fmt.Printf("Failed to load model %s: %v\n", modelPath, err)
 			continue
@@ -273,7 +258,7 @@ func CreateNextGeneration(generationDir string, numModels int, genNum int) {
 		newModelPath := filepath.Join(nextGenerationDir, id.String()+".json")
 		model.Config.Metadata.LastTestAccuracy = 0.0
 		// Save the model to the new path
-		if err := saveModel(newModelPath, model.Config); err != nil {
+		if err := dense.SaveModel(newModelPath, model.Config); err != nil {
 			fmt.Printf("Failed to save model %s: %v\n", newModelPath, err)
 		} else {
 			fmt.Printf("Successfully saved top model to %s\n", newModelPath)
@@ -282,7 +267,7 @@ func CreateNextGeneration(generationDir string, numModels int, genNum int) {
 }
 
 func testPer() {
-	modelConfig, err := loadModel("./host/generations/0/model_0.json")
+	modelConfig, err := dense.LoadModel("./host/generations/0/model_0.json")
 	if err != nil {
 		fmt.Println("Failed to load model:", err)
 		return
@@ -363,7 +348,7 @@ func GenCycleLocalTesting(generationDir string, currentGeneration int) {
 					inputIDNumber, _ := dense.ExtractDigitsToInt(dataShard)
 					savedLayerData := dense.LoadShardedLayerState(modelFilePath, layerNum, strconv.Itoa(inputIDNumber))
 
-					modelConfig, err := loadModel(modelFilePathFolder + ".json")
+					modelConfig, err := dense.LoadModel(modelFilePathFolder + ".json")
 					if err != nil {
 						fmt.Println("Failed to load model:", err)
 					} else {
@@ -415,7 +400,7 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
 			defer wg.Done() // Decrement WaitGroup counter when done
 
 			// Load the model configuration inside each goroutine
-			modelConfig, err := loadModel(modelFilePathFolder + ".json")
+			modelConfig, err := dense.LoadModel(modelFilePathFolder + ".json")
 			if err != nil {
 				fmt.Println("Failed to load model:", err)
 				return
@@ -474,7 +459,7 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
 					foundMatch = true
 
 					//fmt.Printf("Match found on iteration %d\n", iteration)
-					//EvaluateModelAccuracyFromLayerState(layerStateNumber int,modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string)
+					//EvaluateModelAccuracyFromLayerState(layerStateNumber int,modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string)
 					mutatedAccuracy := EvaluateModelAccuracyFromLayerState(layerNum, modelConfig, testDataChunk, modelFilePathFolder+".json")
 					baselineAccuracy := modelConfig.Metadata.LastTestAccuracy
 
@@ -514,7 +499,7 @@ func ApplyMutations(modelFilePathFolder string, inputIDNumber int, layerNum int,
 }
 
 // EvaluateModelAccuracy evaluates the model's accuracy on the entire test dataset.
-func EvaluateModelAccuracy(modelConfig *dense.NetworkConfig, testData []MNISTImageData) float64 {
+func EvaluateModelAccuracy(modelConfig *dense.NetworkConfig, testData []dense.ImageData) float64 {
 	var correct int
 	total := len(testData)
 	var mu sync.Mutex
@@ -561,7 +546,7 @@ func EvaluateModelAccuracy(modelConfig *dense.NetworkConfig, testData []MNISTIma
 	return accuracy
 }
 
-func EvaluateModelAccuracyFromLayerState(layerStateNumber int, modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) float64 {
+func EvaluateModelAccuracyFromLayerState(layerStateNumber int, modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) float64 {
 
 	numWorkers := 10
 	batchSize := len(testData) / numWorkers
@@ -630,7 +615,7 @@ func EvaluateModelAccuracyFromLayerState(layerStateNumber int, modelConfig *dens
 // - savedEvalOutputs: The slice containing the results from the saved layer state evaluations.
 // Returns:
 // - accuracy: The accuracy as a float64 value (0.0 to 1.0).
-func CalculateAccuracy(testData []MNISTImageData, savedEvalOutputs []map[string]float64) float64 {
+func CalculateAccuracy(testData []dense.ImageData, savedEvalOutputs []map[string]float64) float64 {
 	correctMatches := 0
 	totalEvaluated := 0
 
@@ -660,7 +645,7 @@ func CalculateAccuracy(testData []MNISTImageData, savedEvalOutputs []map[string]
 }
 
 // TestShardedModelPerformance compares the performance of full model evaluation vs. sharded layer state.
-func TestShardedModelPerformance(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func TestShardedModelPerformance(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
 	fmt.Println("Starting full model evaluation...")
@@ -699,7 +684,7 @@ func TestShardedModelPerformance(modelConfig *dense.NetworkConfig, testData []MN
 	}
 }
 
-func TestShardedModelPerformanceMultithreaded(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func TestShardedModelPerformanceMultithreaded(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
 	// Prepare synchronization tools for multithreading
@@ -806,7 +791,7 @@ func TestShardedModelPerformanceMultithreaded(modelConfig *dense.NetworkConfig, 
 	}
 }
 
-func CompareModelOutputsWithLoadTimesSingleLoad(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func CompareModelOutputsWithLoadTimesSingleLoad(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	// Get the index of the last hidden layer
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
@@ -875,7 +860,7 @@ func CompareModelOutputsWithLoadTimesSingleLoad(modelConfig *dense.NetworkConfig
 	}
 }
 
-func CompareModelOutputsWithLoadTimes(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func CompareModelOutputsWithLoadTimes(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	// Get the index of the last hidden layer
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
@@ -939,7 +924,7 @@ func CompareModelOutputsWithLoadTimes(modelConfig *dense.NetworkConfig, testData
 
 // CompareModelOutputs compares the outputs of the full model and the model starting from the saved layer state
 // for the top N images in the MNIST dataset.
-func CompareModelOutputs(modelConfig *dense.NetworkConfig, testData []MNISTImageData, modelFilePath string) {
+func CompareModelOutputs(modelConfig *dense.NetworkConfig, testData []dense.ImageData, modelFilePath string) {
 	// Get the index of the last hidden layer
 	layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
 
@@ -998,57 +983,12 @@ func CompareModelOutputs(modelConfig *dense.NetworkConfig, testData []MNISTImage
 	}
 }
 
-func saveLayerStates(generationDir string) {
-	files, err := ioutil.ReadDir(generationDir)
-	if err != nil {
-		fmt.Printf("Failed to read models directory: %v\n", err)
-		return
-	}
-
-	totalFiles := len(files)
-	batchSize := 2 // Number of models to process concurrently
-
-	var wg sync.WaitGroup
-	semaphore := make(chan struct{}, batchSize) // Semaphore to limit concurrency
-
-	for batchIndex := 0; batchIndex < totalFiles; batchIndex += batchSize {
-		endIndex := batchIndex + batchSize
-		if endIndex > totalFiles {
-			endIndex = totalFiles
-		}
-
-		for i := batchIndex; i < endIndex; i++ {
-
-			if filepath.Ext(files[i].Name()) != ".json" {
-				continue // Skip non-JSON files
-			}
-
-			modelFilePath := filepath.Join(generationDir, files[i].Name())
-
-			wg.Add(1)
-			semaphore <- struct{}{} // Acquire a slot in the semaphore
-
-			go func(modelFilePath string) {
-				defer wg.Done()
-				defer func() { <-semaphore }() // Release the semaphore when done
-
-				fmt.Printf("Processing model: %s\n", modelFilePath)
-				processModelEvalState(modelFilePath)
-			}(modelFilePath)
-		}
-
-		// Wait for all goroutines in this batch to complete before moving to the next batch
-		wg.Wait()
-	}
-
-	fmt.Println("All models processed.")
-}
 
 func processModelEvalState(modelFilePath string) {
 	// Replace this with your actual model processing logic
 
 	// Simulate some work with a sleep or processing code here
-	modelConfig, err := loadModel(modelFilePath)
+	modelConfig, err := dense.LoadModel(modelFilePath)
 	if err != nil {
 		fmt.Errorf("failed to load model %s: %w", modelFilePath, err)
 	}
@@ -1077,7 +1017,7 @@ func processModelEvalState(modelFilePath string) {
 		modelConfig.Metadata.LastTestAccuracy = accuracy
 
 		// Save the mutated model back to the same file
-		if err := saveModel(modelFilePath, modelConfig); err != nil {
+		if err := dense.SaveModel(modelFilePath, modelConfig); err != nil {
 			fmt.Println("failed to save mutated model %s: %w", modelFilePath, err)
 		}
 	}
@@ -1086,8 +1026,8 @@ func processModelEvalState(modelFilePath string) {
 
 //step 1-----------------------------
 
-// LoadMNISTData loads the MNIST data from the JSON file and returns an array of MNISTImageData
-func LoadMNISTData() { // ([]MNISTImageData, error) {
+// LoadMNISTData loads the MNIST data from the JSON file and returns an array of dense.ImageData
+func LoadMNISTData() { // ([]dense.ImageData, error) {
 	jsonFile, _ := os.Open(jsonFilePath)
 
 	defer jsonFile.Close()
@@ -1097,7 +1037,7 @@ func LoadMNISTData() { // ([]MNISTImageData, error) {
 		//return nil, err
 	}
 
-	//var mnistData []MNISTImageData
+	//var mnistData []dense.ImageData
 	err = json.Unmarshal(byteValue, &mnistData)
 	if err != nil {
 		//return nil, err
@@ -1135,7 +1075,7 @@ func setupMNIST() {
 }
 
 /*
-func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
+func evaluateModel(testData []dense.ImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
     correct := 0
 
     // Get the index of the last hidden layer
@@ -1178,7 +1118,7 @@ func evaluateModel(testData []MNISTImageData, modelConfig *dense.NetworkConfig, 
     return accuracy
 }*/
 
-func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
+func evaluateModelMultiThreaded(testData []dense.ImageData, modelConfig *dense.NetworkConfig, modelFilePath string) float64 {
 	var correct int
 	var mu sync.Mutex // To protect the `correct` counter
 	var wg sync.WaitGroup
@@ -1215,7 +1155,7 @@ func evaluateModelMultiThreaded(testData []MNISTImageData, modelConfig *dense.Ne
 		wg.Add(1)
 
 		// Pass the 'start' index to the goroutine
-		go func(start int, testDataBatch []MNISTImageData) {
+		go func(start int, testDataBatch []dense.ImageData) {
 			defer wg.Done() // Decrement the wait group counter when done
 
 			localCorrect := 0
@@ -1353,71 +1293,8 @@ func getMaxIndex(outputs map[string]float64) int {
 	return maxIndex
 }
 
-//---step 3 make bulk of them
 
-// GenerateModels generates a specified number of models and saves them in the host/generations/0 folder.
-func GenerateModels(numModels int, inputSize, outputSize int, outputTypes []string, projectName string) error {
-	// Create the directory to store the models
-	modelDir := "./host/generations/0"
-	if err := os.MkdirAll(modelDir, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create model directory: %w", err)
-	}
 
-	// Generate and save models
-	for i := 0; i < numModels; i++ {
-		modelID := fmt.Sprintf("model_%d", i)
-		//modelConfig := dense.CreateRandomNetworkConfig(inputSize, outputSize, outputTypes, modelID, projectName)
 
-		//firstLayerNeurons := 2 * inputSize // Double the number of input neurons
-		firstLayerNeurons := 128
-		modelConfig := dense.CreateCustomNetworkConfig(inputSize, firstLayerNeurons, outputSize, outputTypes, modelID, projectName)
 
-		// Serialize the model to JSON
-		modelFilePath := filepath.Join(modelDir, modelID+".json")
-		modelFile, err := os.Create(modelFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to create model file %s: %w", modelFilePath, err)
-		}
-		defer modelFile.Close()
 
-		encoder := json.NewEncoder(modelFile)
-		if err := encoder.Encode(modelConfig); err != nil {
-			return fmt.Errorf("failed to serialize model %s: %w", modelFilePath, err)
-		}
-
-		log.Printf("Saved model %d to %s\n", i, modelFilePath)
-	}
-
-	return nil
-}
-
-// Load a model from a file
-func loadModel(filePath string) (*dense.NetworkConfig, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open model file: %w", err)
-	}
-	defer file.Close()
-
-	var modelConfig dense.NetworkConfig
-	if err := json.NewDecoder(file).Decode(&modelConfig); err != nil {
-		return nil, fmt.Errorf("failed to decode model: %w", err)
-	}
-
-	return &modelConfig, nil
-}
-
-// Save a model to a file
-func saveModel(filePath string, modelConfig *dense.NetworkConfig) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to create model file: %w", err)
-	}
-	defer file.Close()
-
-	if err := json.NewEncoder(file).Encode(modelConfig); err != nil {
-		return fmt.Errorf("failed to encode model: %w", err)
-	}
-
-	return nil
-}
