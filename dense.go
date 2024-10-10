@@ -48,13 +48,16 @@ type Layer struct {
 
 // ModelMetadata holds metadata for the model.
 type ModelMetadata struct {
-	ModelID             string  `json:"modelID"`
-	ProjectName         string  `json:"projectName"`
-	LastTrainingAccuracy float64 `json:"lastTrainingAccuracy"`
-	LastTestAccuracy     float64 `json:"lastTestAccuracy"`
-	Path     			string `json:"path"`
-	Evaluated            bool    `json:"evaluated"` // New field to track if the model has been evaluated
+	ModelID              string   `json:"modelID"`
+	ProjectName          string   `json:"projectName"`
+	LastTrainingAccuracy float64  `json:"lastTrainingAccuracy"`
+	LastTestAccuracy     float64  `json:"lastTestAccuracy"`
+	Path                 string   `json:"path"`
+	Evaluated            bool     `json:"evaluated"`      // Field to track if the model has been evaluated
+	ParentModelIDs       []string `json:"parentModelIDs"` // Field to track multiple parent models
+	ChildModelIDs        []string `json:"childModelIDs"`  // Field to track child models
 }
+
 
 // NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers, and model metadata.
 type NetworkConfig struct {
