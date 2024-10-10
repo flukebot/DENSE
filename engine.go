@@ -217,6 +217,9 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
             continue
         }
 
+        // Create the learnedOrNot folder for storing whether the input was correctly predicted or not
+        learnedOrNotFolder := CreateLearnedOrNotFolder(modelFilePath, layerStateNumber)
+
         // WaitGroup to wait for all goroutines to finish
         var wg sync.WaitGroup
 
@@ -260,11 +263,17 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 
                     // Run the evaluation starting from the saved layer state
                     result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
-                    if CompareOutputs(result, actualOutput) {
+                    
+                    // Compare the results and store the prediction status
+                    isCorrect := CompareOutputs(result, actualOutput)
+                    if isCorrect {
                         results <- 1
                     } else {
                         results <- 0
                     }
+
+                    // Save the learned status (true if correct, false if incorrect)
+                    SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
                 }
             }(v)
         }
@@ -324,3 +333,89 @@ func CompareOutputs(predicted, actual map[string]float64) bool {
 
 
 
+func EvaluateSingleModelAccuracy(modelConfig *NetworkConfig, data *[]interface{}, layerStateNumber int, generationDir string) (float64, error) {
+    modelName := modelConfig.Metadata.ModelID
+    modelFolderPath := filepath.Join(generationDir, modelName)
+    shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+
+    // Check if the shard folder for this layer exists
+    if _, err := os.Stat(shardFolderPath); os.IsNotExist(err) {
+        return 0, fmt.Errorf("Shard folder for layer %d does not exist in model %s", layerStateNumber, modelName)
+    }
+
+    // Get the number of available CPU cores and create a semaphore based on this number
+    numCores := runtime.NumCPU()
+    semaphore := make(chan struct{}, numCores)
+
+    var wg sync.WaitGroup
+
+    // Channel to store the evaluation results (0 for incorrect, 1 for correct)
+    results := make(chan int, len(*data))
+
+    // Loop through the data and launch a goroutine for each item
+    for _, v := range *data {
+        semaphore <- struct{}{} // Acquire a semaphore slot
+        wg.Add(1)
+
+        go func(d interface{}) {
+            defer wg.Done()
+            defer func() { <-semaphore }() // Release semaphore slot when done
+
+            var inputID string
+            var actualOutput map[string]float64
+
+            // Handle the type of data with type assertion
+            switch d := d.(type) {
+            case ImageData:
+                inputID = d.FileName
+                actualOutput = d.OutputMap
+            default:
+                fmt.Printf("Unknown data type: %T\n", d)
+                return
+            }
+
+            // Construct the path to the shard file
+            shardFilePath := filepath.Join(shardFolderPath, fmt.Sprintf("input_%s.csv", inputID))
+
+            // Check if the shard file exists
+            if _, err := os.Stat(shardFilePath); err == nil {
+                // Load the saved layer state from the shard file
+                savedLayerData := LoadShardedLayerState(modelFolderPath, layerStateNumber, inputID)
+                if savedLayerData == nil {
+                    fmt.Printf("No saved layer data for input ID %s. Skipping.\n", inputID)
+                    return
+                }
+
+                // Run the evaluation starting from the saved layer state
+                result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+                if CompareOutputs(result, actualOutput) {
+                    results <- 1
+                } else {
+                    results <- 0
+                }
+            }
+        }(v)
+    }
+
+    // Wait for all goroutines to finish
+    wg.Wait()
+    close(results)
+
+    // Tally up the correct results
+    totalCorrect := 0
+    totalData := len(*data)
+
+    for res := range results {
+        totalCorrect += res
+    }
+
+    // Calculate the accuracy
+    if totalData > 0 {
+        accuracy := float64(totalCorrect) / float64(totalData)
+        fmt.Printf("Model %s accuracy: %.2f%% (%d/%d)\n", modelName, accuracy*100, totalCorrect, totalData)
+        return accuracy, nil
+    } else {
+        fmt.Println("No data to evaluate accuracy.")
+        return 0, fmt.Errorf("no data to evaluate accuracy")
+    }
+}
