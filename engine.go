@@ -166,7 +166,6 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 
 
 
-
 func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string) {
     files, err := ioutil.ReadDir(generationDir)
     if err != nil {
@@ -188,11 +187,11 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
         modelName := strings.TrimSuffix(value.Name(), filepath.Ext(value.Name()))
 
         // Generate the full file path for LoadModel
-        filePath := filepath.Join(generationDir, value.Name())
+        modelFilePath := filepath.Join(generationDir, value.Name())
         fmt.Println("Evaluating Model:", modelName)
 
         // Assuming LoadModel takes the full file path as an argument
-        modelConfig, err := LoadModel(filePath)
+        modelConfig, err := LoadModel(modelFilePath)
         if err != nil {
             fmt.Println("Failed to load model:", err)
             return
@@ -204,16 +203,9 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
         modelFolderPath := filepath.Join(generationDir, modelName)
         shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
 
-        // Check if the shard folder for this layer already exists
-        if _, err := os.Stat(shardFolderPath); !os.IsNotExist(err) {
-            fmt.Printf("Shard folder for layer %d already exists in model %s, skipping...\n", layerStateNumber, modelName)
-            continue
-        }
-
-        // Create the shard folder if it doesn't exist
-        err = os.MkdirAll(shardFolderPath, os.ModePerm)
-        if err != nil {
-            fmt.Printf("Failed to create shard folder in model %s: %v\n", modelName, err)
+        // Check if the shard folder for this layer exists
+        if _, err := os.Stat(shardFolderPath); os.IsNotExist(err) {
+            fmt.Printf("Shard folder for layer %d does not exist in model %s, skipping...\n", layerStateNumber, modelName)
             continue
         }
 
@@ -230,7 +222,6 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
                 defer wg.Done()
                 defer func() { <-semaphore }() // Release semaphore slot when done
 
-                //var inputs map[string]interface{}
                 var inputID string
 
                 // Handle the type of data with type assertion
@@ -242,19 +233,28 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
                     return
                 }
 
-                // Construct the path to check if the shard for this input already exists in the model's shard folder
+                // Construct the path to the shard file
                 shardFilePath := filepath.Join(shardFolderPath, fmt.Sprintf("input_%s.csv", inputID))
+                fmt.Println("Processing Shard:", shardFilePath)
 
-                // Check if the shard already exists for this input
+                // Check if the shard file exists
                 if _, err := os.Stat(shardFilePath); err == nil {
-                    fmt.Printf("Shard already exists for input %s, skipping...\n", inputID)
-                    return
-                }
+                    fmt.Printf("Shard already exists for input %s, loading...\n", inputID)
+                    
+                    // Load the saved layer state from the shard file
+                    savedLayerData := LoadShardedLayerState(modelFilePath, layerStateNumber, inputID)
+                    if savedLayerData == nil {
+                        fmt.Printf("No saved layer data for input ID %s. Skipping.\n", inputID)
+                        return
+                    }
 
-                // Run Feedforward and save the layer state if it doesn't exist
-                /*outputPredicted, layerState := FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, filePath)
-                _ = outputPredicted
-                SaveShardedLayerState(layerState, filePath, layerStateNumber, inputID)*/
+                    // Run the evaluation starting from the saved layer state
+                    result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+                    _ = result
+					fmt.Println(result)
+                    // You can now compare the result with the actual data if needed (handle this comparison elsewhere)
+                    
+                }
 
             }(v)
         }
@@ -263,7 +263,8 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
         wg.Wait()
     }
 
-    fmt.Println("All models Evaluated.")
+    fmt.Println("All models evaluated.")
 }
+
 
 
