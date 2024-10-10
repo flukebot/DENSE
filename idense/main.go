@@ -152,7 +152,11 @@ func main() {
 	projectName := "AIModelTestProject"
 	inputSize := 28 * 28               // Input size for MNIST data
 	outputSize := 10                   // Output size for MNIST digits (0-9)
-	outputTypes := []string{"softmax"} // Activation type for output layer
+	outputTypes := []string{
+        "sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+        "sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+    } // Activation type for output layer
+    
 	//mnistDataFilePath := "./host/mnistData.json"
 	//percentageTrain := 0.8
 	numModels := 2
