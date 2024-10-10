@@ -162,8 +162,20 @@ func main() {
 	numModels := 2
 	generationNum := 500
     projectPath := "./host/generations/"
-    
-    dense.GenerateModelsIfNotExist(projectPath + "0", numModels, inputSize, outputSize, outputTypes, projectName)
+
+
+    filesExist, err := dense.FilesWithExtensionExistInCurrentFolder(projectPath+"0", ".json")
+    if err != nil {
+        fmt.Println("Error checking for files with extension:", err)
+        return
+    }
+
+    if filesExist {
+        fmt.Println("Files with the specified extension already exist. Skipping model generation.")
+    } else {
+        fmt.Println("No files found with the specified extension. Generating models.")
+        dense.GenerateModelsIfNotExist(projectPath+"0", numModels, inputSize, outputSize, outputTypes, projectName)
+    }
 
 	testDataChunk = mnistData[:40000]
 
@@ -171,6 +183,14 @@ func main() {
 	// Split the data into training and testing sets
     trainSize := int(percentageTrain * float64(len(mnistData)))
     trainData := mnistData[:trainSize]
+
+    // Loop through trainData and assign the output map
+    for i := range trainData {
+        trainData[i].OutputMap = convertLabelToOutputMap(trainData[i].Label)
+        //fmt.Println(trainData[i])
+    }
+
+    
 
     // Create a new slice of type []interface{}
     testDataInterface := make([]interface{}, len(trainData))
@@ -210,6 +230,17 @@ func main() {
 	//TestModelPerformance(modelConfig, mnistData, "./host/generations/0/model_0.json")
 	//CompareModelOutputsWithLoadTimesSingleLoad(modelConfig, mnistData[:10], "./host/generations/0/model_0.json")
 }
+
+// Helper function to convert label to a one-hot encoded map with float64 values
+func convertLabelToOutputMap(label int) map[string]float64 {
+	outputMap := make(map[string]float64)
+	for i := 0; i < 10; i++ {
+		outputMap[fmt.Sprintf("output%d", i)] = 0.0
+	}
+	outputMap[fmt.Sprintf("output%d", label)] = 1.0
+	return outputMap
+}
+
 
 func CreateNextGeneration(generationDir string, numModels int, genNum int) {
 	// Step 1: Get all .json model files in the directory

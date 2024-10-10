@@ -53,6 +53,7 @@ type ModelMetadata struct {
 	LastTrainingAccuracy float64 `json:"lastTrainingAccuracy"`
 	LastTestAccuracy     float64 `json:"lastTestAccuracy"`
 	Path     			string `json:"path"`
+	Evaluated            bool    `json:"evaluated"` // New field to track if the model has been evaluated
 }
 
 // NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers, and model metadata.

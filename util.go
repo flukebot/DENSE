@@ -512,3 +512,38 @@ func DeleteAllFolders(dirPath string) error {
 
 	return nil
 }
+
+// Check if any files with the specified extension exist in the directory
+func FilesWithExtensionExist(directory, fileExtension string) (bool, error) {
+    var matchingFiles []string
+    err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+        if filepath.Ext(info.Name()) == fileExtension {
+            matchingFiles = append(matchingFiles, path)
+        }
+        return nil
+    })
+    if err != nil {
+        return false, err
+    }
+    return len(matchingFiles) > 0, nil
+}
+
+// FilesWithExtensionExistInCurrentFolder checks if any files with the specified extension exist in the given directory.
+// It only checks the current directory and does not walk through subdirectories.
+func FilesWithExtensionExistInCurrentFolder(directory, fileExtension string) (bool, error) {
+    files, err := ioutil.ReadDir(directory)
+    if err != nil {
+        return false, err
+    }
+
+    for _, file := range files {
+        if !file.IsDir() && filepath.Ext(file.Name()) == fileExtension {
+            return true, nil
+        }
+    }
+
+    return false, nil
+}

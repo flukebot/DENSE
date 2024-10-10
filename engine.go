@@ -10,11 +10,13 @@ import (
 	"io/ioutil"
 	"runtime"
 	"strings"
+    "math"
 )
 
 type ImageData struct {
 	FileName string `json:"file_name"`
 	Label    int    `json:"label"`
+    OutputMap map[string]float64 `json:"output_map"`
 }
 
 // TestData is a generalized interface for different types of test data.
@@ -131,6 +133,7 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
                 case ImageData:
                     inputs = ConvertImageToInputs(filepath.Join(imgDir, d.FileName)) // Convert image to input values
                     inputID = d.FileName
+                    fmt.Println(d.Label)
                 default:
                     fmt.Printf("Unknown data type: %T\n", d)
                     return
@@ -178,7 +181,6 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
     semaphore := make(chan struct{}, numCores)
 
     for _, value := range files {
-
         if filepath.Ext(value.Name()) != ".json" {
             continue // Skip non-JSON files
         }
@@ -190,11 +192,17 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
         modelFilePath := filepath.Join(generationDir, value.Name())
         fmt.Println("Evaluating Model:", modelName)
 
-        // Assuming LoadModel takes the full file path as an argument
+        // Load the model configuration
         modelConfig, err := LoadModel(modelFilePath)
         if err != nil {
             fmt.Println("Failed to load model:", err)
             return
+        }
+
+        // Check if the model has already been evaluated, if so, skip it
+        if modelConfig.Metadata.Evaluated {
+            fmt.Printf("Model %s has already been evaluated, skipping...\n", modelName)
+            continue
         }
 
         layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
@@ -212,22 +220,26 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
         // WaitGroup to wait for all goroutines to finish
         var wg sync.WaitGroup
 
+        // This will store the results (0 or 1) for each data item
+        results := make(chan int, len(*data))
+
         // Loop through the data and launch a goroutine for each item
         for _, v := range *data {
             semaphore <- struct{}{} // Acquire a semaphore slot
             wg.Add(1)
 
-            // Launch a goroutine for each data item
             go func(d interface{}) {
                 defer wg.Done()
                 defer func() { <-semaphore }() // Release semaphore slot when done
 
                 var inputID string
+                var actualOutput map[string]float64
 
                 // Handle the type of data with type assertion
                 switch d := d.(type) {
                 case ImageData:
                     inputID = d.FileName
+                    actualOutput = d.OutputMap
                 default:
                     fmt.Printf("Unknown data type: %T\n", d)
                     return
@@ -235,11 +247,9 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 
                 // Construct the path to the shard file
                 shardFilePath := filepath.Join(shardFolderPath, fmt.Sprintf("input_%s.csv", inputID))
-                fmt.Println("Processing Shard:", shardFilePath)
 
                 // Check if the shard file exists
                 if _, err := os.Stat(shardFilePath); err == nil {
-                    fmt.Printf("Shard already exists for input %s, loading...\n", inputID)
                     
                     // Load the saved layer state from the shard file
                     savedLayerData := LoadShardedLayerState(modelFilePath, layerStateNumber, inputID)
@@ -250,20 +260,66 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 
                     // Run the evaluation starting from the saved layer state
                     result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
-                    _ = result
-					fmt.Println(result)
-                    // You can now compare the result with the actual data if needed (handle this comparison elsewhere)
-                    
+                    if CompareOutputs(result, actualOutput) {
+                        results <- 1
+                    } else {
+                        results <- 0
+                    }
                 }
-
             }(v)
         }
 
         // Wait for all goroutines to finish
         wg.Wait()
+        close(results)
+
+        // Tally up the correct results
+        totalCorrect := 0
+        totalData := len(*data)
+
+        for res := range results {
+            totalCorrect += res
+        }
+
+        // Print and save the accuracy for this model
+        if totalData > 0 {
+            accuracy := float64(totalCorrect) / float64(totalData)
+            fmt.Printf("Model %s accuracy: %.2f%% (%d/%d)\n", modelName, accuracy*100, totalCorrect, totalData)
+
+            // Save the accuracy and mark the model as evaluated
+            modelConfig.Metadata.LastTestAccuracy = accuracy
+            modelConfig.Metadata.Evaluated = true  // Mark the model as evaluated
+
+            // Save the updated model configuration
+            if err := SaveModel(modelFilePath, modelConfig); err != nil {
+                fmt.Printf("Failed to save updated model with accuracy: %v\n", err)
+            } else {
+                fmt.Printf("Updated model %s with accuracy %.2f%% and marked as evaluated.\n", modelName, accuracy*100)
+            }
+        } else {
+            fmt.Println("No data to evaluate accuracy.")
+        }
     }
 
     fmt.Println("All models evaluated.")
+}
+
+
+
+// Helper function to compare two output maps
+func CompareOutputs(predicted, actual map[string]float64) bool {
+    if len(predicted) != len(actual) {
+        return false
+    }
+
+    for key, actualValue := range actual {
+        predictedValue, exists := predicted[key]
+        if !exists || math.Abs(predictedValue-actualValue) > 1e-6 { // Allowing for floating-point error tolerance
+            return false
+        }
+    }
+
+    return true
 }
 
 
