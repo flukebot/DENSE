@@ -58,7 +58,6 @@ type ModelMetadata struct {
 	ChildModelIDs        []string `json:"childModelIDs"`  // Field to track child models
 }
 
-
 // NetworkConfig represents the structure of the neural network, containing input, hidden, and output layers, and model metadata.
 type NetworkConfig struct {
 	Metadata ModelMetadata `json:"metadata"`
@@ -181,197 +180,191 @@ func Feedforward(config *NetworkConfig, inputValues map[string]interface{}) map[
 }
 
 func FeedforwardLayerStateSaving(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, outputPath string, inputID string) map[string]float64 {
-    var data interface{}
+	var data interface{}
 
-    // Load input values into the data variable
-    if config.Layers.Input.LayerType == "dense" {
-        // Input is dense
-        inputData := make(map[string]float64)
-        for k, v := range inputValues {
-            if val, ok := v.(float64); ok {
-                inputData[k] = val
-            } else {
-                return nil
-            }
-        }
-        data = inputData
-    } else if config.Layers.Input.LayerType == "conv" {
-        if imageData, ok := inputValues["image"].([][]float64); ok {
-            data = imageData
-        } else {
-            return nil
-        }
-    } else if config.Layers.Input.LayerType == "lstm" {
-        if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
-            data = sequenceData
-        } else {
-            return nil
-        }
-    }
+	// Load input values into the data variable
+	if config.Layers.Input.LayerType == "dense" {
+		// Input is dense
+		inputData := make(map[string]float64)
+		for k, v := range inputValues {
+			if val, ok := v.(float64); ok {
+				inputData[k] = val
+			} else {
+				return nil
+			}
+		}
+		data = inputData
+	} else if config.Layers.Input.LayerType == "conv" {
+		if imageData, ok := inputValues["image"].([][]float64); ok {
+			data = imageData
+		} else {
+			return nil
+		}
+	} else if config.Layers.Input.LayerType == "lstm" {
+		if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
+			data = sequenceData
+		} else {
+			return nil
+		}
+	}
 
-    // Process hidden layers
-    for index, layer := range config.Layers.Hidden {
-        switch layer.LayerType {
-        case "dense":
-            data = processDenseLayer(layer, data)
-        case "conv":
-            data = processConvLayer(layer, data)
-        case "lstm":
-            data = processLSTMLayer(layer, data)
-        default:
-            // Handle error or default case
-        }
+	// Process hidden layers
+	for index, layer := range config.Layers.Hidden {
+		switch layer.LayerType {
+		case "dense":
+			data = processDenseLayer(layer, data)
+		case "conv":
+			data = processConvLayer(layer, data)
+		case "lstm":
+			data = processLSTMLayer(layer, data)
+		default:
+			// Handle error or default case
+		}
 
-        if hiddenLayer == index {
-            saveLayerDataToCSV(data, outputPath, index, inputID)
-        }
-    }
+		if hiddenLayer == index {
+			saveLayerDataToCSV(data, outputPath, index, inputID)
+		}
+	}
 
-    // Process output layer
-    outputLayer := config.Layers.Output
-    switch outputLayer.LayerType {
-    case "dense":
-        data = processDenseLayer(outputLayer, data)
-    case "conv":
-        data = processConvLayer(outputLayer, data)
-    case "lstm":
-        data = processLSTMLayer(outputLayer, data)
-    default:
-        // Handle error or default case
-    }
+	// Process output layer
+	outputLayer := config.Layers.Output
+	switch outputLayer.LayerType {
+	case "dense":
+		data = processDenseLayer(outputLayer, data)
+	case "conv":
+		data = processConvLayer(outputLayer, data)
+	case "lstm":
+		data = processLSTMLayer(outputLayer, data)
+	default:
+		// Handle error or default case
+	}
 
-    if outputData, ok := data.(map[string]float64); ok {
-        return outputData
-    } else {
-        return nil
-    }
+	if outputData, ok := data.(map[string]float64); ok {
+		return outputData
+	} else {
+		return nil
+	}
 }
 
 // FeedforwardLayerStateSavingShard processes inputs through the network, saves the layer state as shards for the given layer, and returns the final output.
 func FeedforwardLayerStateSavingShard(config *NetworkConfig, inputValues map[string]interface{}, hiddenLayer int, modelFilePath string) (map[string]float64, interface{}) {
-    var data interface{}
+	var data interface{}
 
-    // Load input values into the data variable
-    if config.Layers.Input.LayerType == "dense" {
-        inputData := make(map[string]float64)
-        for k, v := range inputValues {
-            if val, ok := v.(float64); ok {
-                inputData[k] = val
-            } else {
-                return nil, nil
-            }
-        }
-        data = inputData
-    } else if config.Layers.Input.LayerType == "conv" {
-        if imageData, ok := inputValues["image"].([][]float64); ok {
-            data = imageData
-        } else {
-            return nil, nil
-        }
-    } else if config.Layers.Input.LayerType == "lstm" {
-        if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
-            data = sequenceData
-        } else {
-            return nil, nil
-        }
-    }
+	// Load input values into the data variable
+	if config.Layers.Input.LayerType == "dense" {
+		inputData := make(map[string]float64)
+		for k, v := range inputValues {
+			if val, ok := v.(float64); ok {
+				inputData[k] = val
+			} else {
+				return nil, nil
+			}
+		}
+		data = inputData
+	} else if config.Layers.Input.LayerType == "conv" {
+		if imageData, ok := inputValues["image"].([][]float64); ok {
+			data = imageData
+		} else {
+			return nil, nil
+		}
+	} else if config.Layers.Input.LayerType == "lstm" {
+		if sequenceData, ok := inputValues["sequence"].([][]float64); ok {
+			data = sequenceData
+		} else {
+			return nil, nil
+		}
+	}
 
-    var layerState interface{}
+	var layerState interface{}
 
-    // Process hidden layers
-    for index, layer := range config.Layers.Hidden {
-        switch layer.LayerType {
-        case "dense":
-            data = processDenseLayer(layer, data)
-        case "conv":
-            data = processConvLayer(layer, data)
-        case "lstm":
-            data = processLSTMLayer(layer, data)
-        default:
-            return nil, nil
-        }
+	// Process hidden layers
+	for index, layer := range config.Layers.Hidden {
+		switch layer.LayerType {
+		case "dense":
+			data = processDenseLayer(layer, data)
+		case "conv":
+			data = processConvLayer(layer, data)
+		case "lstm":
+			data = processLSTMLayer(layer, data)
+		default:
+			return nil, nil
+		}
 
-        // Save the layer state as shards if it's the target layer
-        if hiddenLayer == index {
-            layerState = data
-        }
-    }
+		// Save the layer state as shards if it's the target layer
+		if hiddenLayer == index {
+			layerState = data
+		}
+	}
 
-    // Process output layer
-    outputLayer := config.Layers.Output
-    switch outputLayer.LayerType {
-    case "dense":
-        data = processDenseLayer(outputLayer, data)
-    case "conv":
-        data = processConvLayer(outputLayer, data)
-    case "lstm":
-        data = processLSTMLayer(outputLayer, data)
-    default:
-        return nil, nil
-    }
+	// Process output layer
+	outputLayer := config.Layers.Output
+	switch outputLayer.LayerType {
+	case "dense":
+		data = processDenseLayer(outputLayer, data)
+	case "conv":
+		data = processConvLayer(outputLayer, data)
+	case "lstm":
+		data = processLSTMLayer(outputLayer, data)
+	default:
+		return nil, nil
+	}
 
-    // Return the output and the saved layer state
-    if outputData, ok := data.(map[string]float64); ok {
-        return outputData, layerState
-    } else {
-        return nil, nil
-    }
+	// Return the output and the saved layer state
+	if outputData, ok := data.(map[string]float64); ok {
+		return outputData, layerState
+	} else {
+		return nil, nil
+	}
 }
-
-
-
 
 // ContinueFeedforward continues the feedforward process from a specified layer with given input data.
 func ContinueFeedforward(config *NetworkConfig, inputData interface{}, startLayer int) map[string]float64 {
-    var data interface{} = inputData
+	var data interface{} = inputData
 
-    // Process the hidden layers starting from the layer after startLayer
-    for index, layer := range config.Layers.Hidden {
-        if index <= startLayer {
-            continue // Skip layers before and including the startLayer
-        }
+	// Process the hidden layers starting from the layer after startLayer
+	for index, layer := range config.Layers.Hidden {
+		if index <= startLayer {
+			continue // Skip layers before and including the startLayer
+		}
 
-        switch layer.LayerType {
-        case "dense":
-            data = processDenseLayer(layer, data)
-        case "conv":
-            data = processConvLayer(layer, data)
-        case "lstm":
-            data = processLSTMLayer(layer, data)
-        default:
-            // Handle error or default case
-        }
-    }
+		switch layer.LayerType {
+		case "dense":
+			data = processDenseLayer(layer, data)
+		case "conv":
+			data = processConvLayer(layer, data)
+		case "lstm":
+			data = processLSTMLayer(layer, data)
+		default:
+			// Handle error or default case
+		}
+	}
 
-    // Process the output layer
-    outputLayer := config.Layers.Output
-    switch outputLayer.LayerType {
-    case "dense":
-        data = processDenseLayer(outputLayer, data)
-    case "conv":
-        data = processConvLayer(outputLayer, data)
-    case "lstm":
-        data = processLSTMLayer(outputLayer, data)
-    default:
-        // Handle error or default case
-    }
+	// Process the output layer
+	outputLayer := config.Layers.Output
+	switch outputLayer.LayerType {
+	case "dense":
+		data = processDenseLayer(outputLayer, data)
+	case "conv":
+		data = processConvLayer(outputLayer, data)
+	case "lstm":
+		data = processLSTMLayer(outputLayer, data)
+	default:
+		// Handle error or default case
+	}
 
-    // Return output values
-    if outputData, ok := data.(map[string]float64); ok {
-        return outputData
-    } else {
-        // Handle error or convert data to desired format
-        return nil
-    }
+	// Return output values
+	if outputData, ok := data.(map[string]float64); ok {
+		return outputData
+	} else {
+		// Handle error or convert data to desired format
+		return nil
+	}
 }
-
-
 
 // GetLastHiddenLayerIndex returns the index of the last hidden layer in the network configuration.
 func GetLastHiddenLayerIndex(config *NetworkConfig) int {
-    return len(config.Layers.Hidden) - 1
+	return len(config.Layers.Hidden) - 1
 }
-
 
 func processDenseLayer(layer Layer, inputData interface{}) interface{} {
 	// inputData is map[string]float64 or output from previous layer
@@ -466,8 +459,8 @@ func convolve(input [][]float64, kernel [][]float64, stride int, padding int) []
 	kernelWidth := len(kernel[0])
 
 	// Calculate output dimensions
-	outputHeight := (inputHeight - kernelHeight) / stride + 1
-	outputWidth := (inputWidth - kernelWidth) / stride + 1
+	outputHeight := (inputHeight-kernelHeight)/stride + 1
+	outputWidth := (inputWidth-kernelWidth)/stride + 1
 
 	output := make([][]float64, outputHeight)
 	for i := 0; i < outputHeight; i++ {
@@ -595,8 +588,8 @@ func dotProduct(a []float64, b []float64) float64 {
 func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes []string, modelID, projectName string) *NetworkConfig {
 	config := &NetworkConfig{
 		Metadata: ModelMetadata{
-			ModelID:             modelID,
-			ProjectName:         projectName,
+			ModelID:              modelID,
+			ProjectName:          projectName,
 			LastTrainingAccuracy: 0.0,
 			LastTestAccuracy:     0.0,
 		},
@@ -688,155 +681,161 @@ func CreateRandomNetworkConfig(numInputs, numOutputs int, outputActivationTypes 
 // CreateCustomNetworkConfig dynamically generates a network with specified input and output sizes,
 // allows dynamic configuration of the first layer's neurons, and the output neurons.
 func CreateCustomNetworkConfig(numInputs, numFirstLayerNeurons, numOutputs int, outputActivationTypes []string, modelID, projectName string) *NetworkConfig {
-    config := &NetworkConfig{
-        Metadata: ModelMetadata{
-            ModelID:             modelID,
-            ProjectName:         projectName,
-            LastTrainingAccuracy: 0.0,
-            LastTestAccuracy:     0.0,
-        },
-    }
+	config := &NetworkConfig{
+		Metadata: ModelMetadata{
+			ModelID:              modelID,
+			ProjectName:          projectName,
+			LastTrainingAccuracy: 0.0,
+			LastTestAccuracy:     0.0,
+		},
+	}
 
-    // Define input layer with the specified number of input neurons
-    config.Layers.Input = Layer{
-        LayerType: "dense", // Or "conv" or "lstm" depending on the network
-        Neurons:   make(map[string]Neuron),
-    }
-    for i := 0; i < numInputs; i++ {
-        neuronID := "input" + strconv.Itoa(i)
-        config.Layers.Input.Neurons[neuronID] = Neuron{}
-    }
+	// Define input layer with the specified number of input neurons
+	config.Layers.Input = Layer{
+		LayerType: "dense", // Or "conv" or "lstm" depending on the network
+		Neurons:   make(map[string]Neuron),
+	}
+	for i := 0; i < numInputs; i++ {
+		neuronID := "input" + strconv.Itoa(i)
+		config.Layers.Input.Neurons[neuronID] = Neuron{}
+	}
 
-    // Define the first hidden layer with the specified number of neurons
-    config.Layers.Hidden = []Layer{
-        {
-            LayerType: "dense",
-            Neurons:   make(map[string]Neuron),
-        },
-    }
+	// Define the first hidden layer with the specified number of neurons
+	config.Layers.Hidden = []Layer{
+		{
+			LayerType: "dense",
+			Neurons:   make(map[string]Neuron),
+		},
+	}
 
-    for i := 0; i < numFirstLayerNeurons; i++ {
-        neuronID := "hidden1_neuron" + strconv.Itoa(i)
-        config.Layers.Hidden[0].Neurons[neuronID] = Neuron{
-            ActivationType: "relu",
-            Connections: func() map[string]Connection {
-                connections := make(map[string]Connection)
-                for j := 0; j < numInputs; j++ {
-                    connections["input"+strconv.Itoa(j)] = Connection{Weight: rand.Float64()}
-                }
-                return connections
-            }(),
-            Bias: rand.Float64(),
-        }
-    }
+	for i := 0; i < numFirstLayerNeurons; i++ {
+		neuronID := "hidden1_neuron" + strconv.Itoa(i)
+		config.Layers.Hidden[0].Neurons[neuronID] = Neuron{
+			ActivationType: "relu",
+			Connections: func() map[string]Connection {
+				connections := make(map[string]Connection)
+				for j := 0; j < numInputs; j++ {
+					connections["input"+strconv.Itoa(j)] = Connection{Weight: rand.Float64()}
+				}
+				return connections
+			}(),
+			Bias: rand.Float64(),
+		}
+	}
 
-    // Define output layer with customizable activation types, random weights, and biases
-    config.Layers.Output = Layer{
-        LayerType: "dense",
-        Neurons:   make(map[string]Neuron),
-    }
-    for i := 0; i < numOutputs; i++ {
-        neuronID := "output" + strconv.Itoa(i)
-        activationType := "sigmoid" // Default activation function
-        if i < len(outputActivationTypes) {
-            activationType = outputActivationTypes[i]
-        }
+	// Define output layer with customizable activation types, random weights, and biases
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
+	for i := 0; i < numOutputs; i++ {
+		neuronID := "output" + strconv.Itoa(i)
+		activationType := "sigmoid" // Default activation function
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
 
-        config.Layers.Output.Neurons[neuronID] = Neuron{
-            ActivationType: activationType,
-            Connections: func() map[string]Connection {
-                connections := make(map[string]Connection)
-                for hiddenNeuronID := range config.Layers.Hidden[0].Neurons {
-                    connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
-                }
-                return connections
-            }(),
-            Bias: rand.Float64(),
-        }
-    }
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections: func() map[string]Connection {
+				connections := make(map[string]Connection)
+				for hiddenNeuronID := range config.Layers.Hidden[0].Neurons {
+					connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
+				}
+				return connections
+			}(),
+			Bias: rand.Float64(),
+		}
+	}
 
-    return config
+	return config
 }
 
 // AdjustOutputLayer dynamically sets the connections for the output layer based on the last hidden layer.
 func AdjustOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
-    // Get the last hidden layer
-    lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+	// Get the last hidden layer
+	lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
 
-    // Define the output layer
-    config.Layers.Output = Layer{
-        LayerType: "dense",
-        Neurons:   make(map[string]Neuron),
-    }
+	// Define the output layer
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
 
-    // Set up each neuron in the output layer with dynamic connections to the last hidden layer
-    for i := 0; i < numOutputs; i++ {
-        neuronID := "output" + strconv.Itoa(i)
+	// Set up each neuron in the output layer with dynamic connections to the last hidden layer
+	for i := 0; i < numOutputs; i++ {
+		neuronID := "output" + strconv.Itoa(i)
 
-        // Set activation type (default to "sigmoid")
-        activationType := "sigmoid"
-        if i < len(outputActivationTypes) {
-            activationType = outputActivationTypes[i]
-        }
+		// Set activation type (default to "sigmoid")
+		activationType := "sigmoid"
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
 
-        // Create a neuron for the output layer
-        config.Layers.Output.Neurons[neuronID] = Neuron{
-            ActivationType: activationType,
-            Connections: func() map[string]Connection {
-                connections := make(map[string]Connection)
+		// Create a neuron for the output layer
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections: func() map[string]Connection {
+				connections := make(map[string]Connection)
 
-                // Connect to every neuron in the last hidden layer
-                for hiddenNeuronID := range lastHiddenLayer.Neurons {
-                    connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
-                }
-                return connections
-            }(),
-            Bias: rand.Float64(),
-        }
-    }
+				// Connect to every neuron in the last hidden layer
+				for hiddenNeuronID := range lastHiddenLayer.Neurons {
+					connections[hiddenNeuronID] = Connection{Weight: rand.Float64()}
+				}
+				return connections
+			}(),
+			Bias: rand.Float64(),
+		}
+	}
 
-    // Optionally, if you need the number of neurons in the last hidden layer for logging or debugging:
-    //numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
-    //fmt.Printf("Number of neurons in the last hidden layer: %d\n", numLastHiddenNeurons)
+	// Optionally, if you need the number of neurons in the last hidden layer for logging or debugging:
+	//numLastHiddenNeurons := len(lastHiddenLayer.Neurons)
+	//fmt.Printf("Number of neurons in the last hidden layer: %d\n", numLastHiddenNeurons)
 }
 
 // ReattachOutputLayer connects the output layer to the last hidden layer
 func ReattachOutputLayer(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
-    lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+	lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
 
-    // Reset the output layer
-    config.Layers.Output = Layer{
-        LayerType: "dense",
-        Neurons:   make(map[string]Neuron),
-    }
+	// Reset the output layer
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
 
-    for i := 0; i < numOutputs; i++ {
-        neuronID := fmt.Sprintf("output%d", i)
-        activationType := "softmax" // Default activation type; can be customized
+	for i := 0; i < numOutputs; i++ {
+		neuronID := fmt.Sprintf("output%d", i)
+		activationType := "softmax" // Default activation type; can be customized
 
-        if i < len(outputActivationTypes) {
-            activationType = outputActivationTypes[i]
-        }
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
 
-        connections := make(map[string]Connection)
-        for hiddenNeuronID := range lastHiddenLayer.Neurons {
-            connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5} // Initialize weights around 0
-        }
+		connections := make(map[string]Connection)
+		for hiddenNeuronID := range lastHiddenLayer.Neurons {
+			connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5} // Initialize weights around 0
+		}
 
-        config.Layers.Output.Neurons[neuronID] = Neuron{
-            ActivationType: activationType,
-            Connections:    connections,
-            Bias:           rand.Float64() - 0.5, // Initialize biases around 0
-        }
-    }
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections:    connections,
+			Bias:           rand.Float64() - 0.5, // Initialize biases around 0
+		}
+	}
 
-    //fmt.Println("Reattached output layer to the new last hidden layer.")
+	//fmt.Println("Reattached output layer to the new last hidden layer.")
 }
 
+func GetPreviousOutputActivationTypes(config *NetworkConfig) []string {
+	outputActivationTypes := []string{}
 
+	// Loop through the neurons in the current output layer
+	for _, neuron := range config.Layers.Output.Neurons {
+		outputActivationTypes = append(outputActivationTypes, neuron.ActivationType)
+	}
 
-
-
+	return outputActivationTypes
+}
 
 func RandomSlice(length int) []float64 {
 	slice := make([]float64, length)
@@ -880,60 +879,59 @@ func DeepCopy(config *NetworkConfig) *NetworkConfig {
 }
 
 func deepCopyLayer(layer Layer) Layer {
-    newLayer := Layer{
-        LayerType: layer.LayerType,
-    }
-    
-    switch layer.LayerType {
-    case "dense":
-        // Ensure the neurons and connections are deep copied
-        newLayer.Neurons = make(map[string]Neuron)
-        for key, neuron := range layer.Neurons {
-            newNeuron := Neuron{
-                ActivationType: neuron.ActivationType,
-                Bias:           neuron.Bias,
-                Connections:    make(map[string]Connection),
-            }
-            for connKey, conn := range neuron.Connections {
-                newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
-            }
-            newLayer.Neurons[key] = newNeuron
-        }
-    case "conv":
-        // Copy filters for convolutional layers
-        newLayer.Filters = make([]Filter, len(layer.Filters))
-        for i, filter := range layer.Filters {
-            newWeights := make([][]float64, len(filter.Weights))
-            for j := range filter.Weights {
-                newWeights[j] = make([]float64, len(filter.Weights[j]))
-                copy(newWeights[j], filter.Weights[j])
-            }
-            newLayer.Filters[i] = Filter{
-                Weights: newWeights,
-                Bias:    filter.Bias,
-            }
-        }
-        newLayer.Stride = layer.Stride
-        newLayer.Padding = layer.Padding
-    case "lstm":
-        // Copy LSTM cells for LSTM layers
-        newLayer.LSTMCells = make([]LSTMCell, len(layer.LSTMCells))
-        for i, cell := range layer.LSTMCells {
-            newCell := LSTMCell{
-                Bias:          cell.Bias,
-                InputWeights:  make([]float64, len(cell.InputWeights)),
-                ForgetWeights: make([]float64, len(cell.ForgetWeights)),
-                OutputWeights: make([]float64, len(cell.OutputWeights)),
-                CellWeights:   make([]float64, len(cell.CellWeights)),
-            }
-            copy(newCell.InputWeights, cell.InputWeights)
-            copy(newCell.ForgetWeights, cell.ForgetWeights)
-            copy(newCell.OutputWeights, cell.OutputWeights)
-            copy(newCell.CellWeights, cell.CellWeights)
-            newLayer.LSTMCells[i] = newCell
-        }
-    }
+	newLayer := Layer{
+		LayerType: layer.LayerType,
+	}
 
-    return newLayer
+	switch layer.LayerType {
+	case "dense":
+		// Ensure the neurons and connections are deep copied
+		newLayer.Neurons = make(map[string]Neuron)
+		for key, neuron := range layer.Neurons {
+			newNeuron := Neuron{
+				ActivationType: neuron.ActivationType,
+				Bias:           neuron.Bias,
+				Connections:    make(map[string]Connection),
+			}
+			for connKey, conn := range neuron.Connections {
+				newNeuron.Connections[connKey] = Connection{Weight: conn.Weight}
+			}
+			newLayer.Neurons[key] = newNeuron
+		}
+	case "conv":
+		// Copy filters for convolutional layers
+		newLayer.Filters = make([]Filter, len(layer.Filters))
+		for i, filter := range layer.Filters {
+			newWeights := make([][]float64, len(filter.Weights))
+			for j := range filter.Weights {
+				newWeights[j] = make([]float64, len(filter.Weights[j]))
+				copy(newWeights[j], filter.Weights[j])
+			}
+			newLayer.Filters[i] = Filter{
+				Weights: newWeights,
+				Bias:    filter.Bias,
+			}
+		}
+		newLayer.Stride = layer.Stride
+		newLayer.Padding = layer.Padding
+	case "lstm":
+		// Copy LSTM cells for LSTM layers
+		newLayer.LSTMCells = make([]LSTMCell, len(layer.LSTMCells))
+		for i, cell := range layer.LSTMCells {
+			newCell := LSTMCell{
+				Bias:          cell.Bias,
+				InputWeights:  make([]float64, len(cell.InputWeights)),
+				ForgetWeights: make([]float64, len(cell.ForgetWeights)),
+				OutputWeights: make([]float64, len(cell.OutputWeights)),
+				CellWeights:   make([]float64, len(cell.CellWeights)),
+			}
+			copy(newCell.InputWeights, cell.InputWeights)
+			copy(newCell.ForgetWeights, cell.ForgetWeights)
+			copy(newCell.OutputWeights, cell.OutputWeights)
+			copy(newCell.CellWeights, cell.CellWeights)
+			newLayer.LSTMCells[i] = newCell
+		}
+	}
+
+	return newLayer
 }
-

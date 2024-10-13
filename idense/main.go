@@ -21,7 +21,6 @@ import (
 	"github.com/google/uuid"
 )
 
-
 // TopModel represents a model and its accuracy
 type TopModel struct {
 	Config   *dense.NetworkConfig
@@ -150,69 +149,76 @@ func main() {
 
 	// Set up the model configuration
 	projectName := "AIModelTestProject"
-	inputSize := 28 * 28               // Input size for MNIST data
-	outputSize := 10                   // Output size for MNIST digits (0-9)
+	inputSize := 28 * 28 // Input size for MNIST data
+	outputSize := 10     // Output size for MNIST digits (0-9)
 	outputTypes := []string{
-        "sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
-        "sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
-    } // Activation type for output layer
-    
+		"sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+		"sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+	} // Activation type for output layer
+
 	//mnistDataFilePath := "./host/mnistData.json"
 	//percentageTrain := 0.8
 	numModels := 2
 	generationNum := 500
-    projectPath := "./host/generations/"
+	projectPath := "./host/generations/"
 
+	filesExist, _ := dense.FilesWithExtensionExistInCurrentFolder(projectPath+"0", ".json")
+	/*fmt.Println(filesExist, projectPath+"0", ".json")
+	if err != nil {
+		fmt.Println("Error checking for files with extension:", err)
+		return
+	}*/
 
-    filesExist, err := dense.FilesWithExtensionExistInCurrentFolder(projectPath+"0", ".json")
-    if err != nil {
-        fmt.Println("Error checking for files with extension:", err)
-        return
-    }
-
-    if filesExist {
-        fmt.Println("Files with the specified extension already exist. Skipping model generation.")
-    } else {
-        fmt.Println("No files found with the specified extension. Generating models.")
-        dense.GenerateModelsIfNotExist(projectPath+"0", numModels, inputSize, outputSize, outputTypes, projectName)
-    }
+	if filesExist {
+		fmt.Println("Files with the specified extension already exist. Skipping model generation.")
+	} else {
+		fmt.Println("No files found with the specified extension. Generating models.")
+		dense.GenerateModelsIfNotExist(projectPath+"0", numModels, inputSize, outputSize, outputTypes, projectName)
+	}
 
 	testDataChunk = mnistData[:40000]
 
-    percentageTrain := 0.8
+	percentageTrain := 0.8
 	// Split the data into training and testing sets
-    trainSize := int(percentageTrain * float64(len(mnistData)))
-    trainData := mnistData[:trainSize]
+	trainSize := int(percentageTrain * float64(len(mnistData)))
+	trainData := mnistData[:trainSize]
 
-    // Loop through trainData and assign the output map
-    for i := range trainData {
-        trainData[i].OutputMap = convertLabelToOutputMap(trainData[i].Label)
-        //fmt.Println(trainData[i])
-    }
+	// Loop through trainData and assign the output map
+	for i := range trainData {
+		trainData[i].OutputMap = convertLabelToOutputMap(trainData[i].Label)
+		//fmt.Println(trainData[i])
+	}
 
-    
+	// Create a new slice of type []interface{}
+	testDataInterface := make([]interface{}, len(trainData))
 
-    // Create a new slice of type []interface{}
-    testDataInterface := make([]interface{}, len(trainData))
+	// Convert each element from []dense.ImageData to []interface{}
+	for i, data := range trainData {
+		testDataInterface[i] = data
+	}
 
-    // Convert each element from []dense.ImageData to []interface{}
-    for i, data := range trainData {
-        testDataInterface[i] = data
-    }
+	// Mutation types
+	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers"}
+
+	// Define ranges for neurons/filters and layers dynamically
+	neuronRange := [2]int{10, 128} // Min and max neurons or filters
+	layerRange := [2]int{1, 5}     // Min and max layers
 
 	for i := 0; i <= generationNum; i++ {
 		generationDir := "./host/generations/" + strconv.Itoa(i)
 		fmt.Println("----CURENT GEN---", generationDir)
 
-        dense.SaveLayerStates(generationDir,&testDataInterface,mnistDir)
-        dense.EvaluateModelAccuracyFromLayerState(generationDir,&testDataInterface,mnistDir)
+		dense.SaveLayerStates(generationDir, &testDataInterface, mnistDir)
+		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir)
+
+		dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
 		//GenCycleLocalTesting(generationDir, i)
 		//dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)
-        break
+		break
 	}
 
-    return
+	return
 
 	//currentGeneration := 0
 
@@ -240,7 +246,6 @@ func convertLabelToOutputMap(label int) map[string]float64 {
 	outputMap[fmt.Sprintf("output%d", label)] = 1.0
 	return outputMap
 }
-
 
 func CreateNextGeneration(generationDir string, numModels int, genNum int) {
 	// Step 1: Get all .json model files in the directory
@@ -1017,7 +1022,6 @@ func CompareModelOutputs(modelConfig *dense.NetworkConfig, testData []dense.Imag
 	}
 }
 
-
 func processModelEvalState(modelFilePath string) {
 	// Replace this with your actual model processing logic
 
@@ -1326,9 +1330,3 @@ func getMaxIndex(outputs map[string]float64) int {
 	}
 	return maxIndex
 }
-
-
-
-
-
-
