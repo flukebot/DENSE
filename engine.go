@@ -480,8 +480,8 @@ func GenerateChildren(generationDir string, data *[]interface{}, mutationTypes [
 						//fmt.Println("Found OutputMap:", outputMap)
 
 						// Perform mutations sequentially and get the matching models
-						matchingModels := PerformMutations(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
-
+						//matchingModels := PerformMutations(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
+						/*matchingModels := PerformMutationsMultiThreadedWithFallback(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
 						// Loop over the results and handle the matching models
 						if len(matchingModels) > 0 {
 							fmt.Println("Found matching models:")
@@ -490,7 +490,7 @@ func GenerateChildren(generationDir string, data *[]interface{}, mutationTypes [
 							}
 						} else {
 							fmt.Println("No matching models found.")
-						}
+						}*/
 
 						/*if tries <= 0 {
 							tries = 100 // Default value for tries if not provided
@@ -517,6 +517,17 @@ func GenerateChildren(generationDir string, data *[]interface{}, mutationTypes [
 								fmt.Printf("Try %d: Output does not match.\n", i+1)
 							}
 						}*/
+
+						// Perform mutations and use fallback to get the best matching model
+						bestModel := PerformMutationsMultiThreadedWithFallback(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
+
+						// Check if we found a matching or improved model
+						if bestModel != nil {
+							fmt.Println("Best matching or improved model found:")
+							//fmt.Println(bestModel)
+						} else {
+							fmt.Println("No matching or improved model found.")
+						}
 
 					}
 
@@ -564,6 +575,54 @@ func PerformMutationsSingleThreaded(generationDir string, tries int, modelFilePa
 	}
 
 	return matchingModels
+}
+
+// Single-threaded mutation with fallback to find at least micro improvements
+func PerformMutationsSingleThreadedWithFallback(generationDir string, tries int, modelFilePathFolder string, savedLayerData interface{}, layerStateNumber int, mutationTypes []string, neuronRange [2]int, layerRange [2]int, outputMap map[string]float64, allowForTolerance bool, tolerancePercentage float64) *NetworkConfig {
+	if tries <= 0 {
+		tries = 100 // Default value for tries if not provided
+	}
+
+	var bestModel *NetworkConfig
+	bestScore := 0.0
+
+	// Perform mutations sequentially for each try
+	for i := 0; i < tries; i++ {
+		// Load model
+		modelConfig, err := LoadModel(modelFilePathFolder + ".json")
+		if err != nil {
+			fmt.Println("Failed to load model:", err)
+			continue
+		}
+
+		// Apply mutation
+		mutatedModel := ApplySingleMutation(modelConfig, mutationTypes, neuronRange, layerRange)
+
+		// Continue the feedforward process with the mutated model
+		mutatedResult := ContinueFeedforward(mutatedModel, savedLayerData, layerStateNumber)
+
+		// Compare the results with the expected output map
+		if FlexibleCompareOutputs(mutatedResult, outputMap, allowForTolerance, tolerancePercentage) {
+			fmt.Printf("Try %d: Found matching output!\n", i+1)
+			return mutatedModel // Return if exact match is found
+		}
+
+		// If no exact match is found, calculate improvement score
+		improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
+		if improvementScore > bestScore {
+			bestScore = improvementScore
+			bestModel = mutatedModel
+		}
+	}
+
+	// If no exact matches were found, return the model with the highest improvement score
+	if bestModel != nil {
+		fmt.Printf("Fallback: Found a model with an improvement score of %.2f\n", bestScore)
+		return bestModel
+	}
+
+	// Return nil if no improvements or matches are found
+	return nil
 }
 
 // Multithreaded version of the mutation and comparison loop
@@ -622,6 +681,80 @@ func PerformMutations(generationDir string, tries int, modelFilePathFolder strin
 	}
 
 	return matchingModels
+}
+
+// Multi-threaded mutation with fallback to find at least micro improvements
+func PerformMutationsMultiThreadedWithFallback(generationDir string, tries int, modelFilePathFolder string, savedLayerData interface{}, layerStateNumber int, mutationTypes []string, neuronRange [2]int, layerRange [2]int, outputMap map[string]float64, allowForTolerance bool, tolerancePercentage float64) *NetworkConfig {
+	if tries <= 0 {
+		tries = 100 // Default value for tries if not provided
+	}
+
+	results := make(chan *NetworkConfig, tries)
+	scores := make(chan float64, tries)
+	var wg sync.WaitGroup
+
+	// Launch goroutines for each try
+	for i := 0; i < tries; i++ {
+		wg.Add(1)
+		go func(try int) {
+			defer wg.Done()
+
+			// Load model
+			modelConfig, err := LoadModel(modelFilePathFolder + ".json")
+			if err != nil {
+				fmt.Println("Failed to load model:", err)
+				results <- nil // Send nil if there's an error
+				scores <- 0.0
+				return
+			}
+
+			// Apply mutation
+			mutatedModel := ApplySingleMutation(modelConfig, mutationTypes, neuronRange, layerRange)
+
+			// Continue the feedforward process with the mutated model
+			mutatedResult := ContinueFeedforward(mutatedModel, savedLayerData, layerStateNumber)
+
+			// Compare the results with the expected output map
+			if FlexibleCompareOutputs(mutatedResult, outputMap, allowForTolerance, tolerancePercentage) {
+				fmt.Printf("Try %d: Found matching output!\n", try+1)
+				results <- mutatedModel // Send matching model
+				scores <- 1.0           // Use perfect score for exact match
+				return
+			}
+
+			// Calculate improvement score
+			improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
+			results <- mutatedModel
+			scores <- improvementScore
+		}(i)
+	}
+
+	// Wait for all goroutines to finish
+	go func() {
+		wg.Wait()
+		close(results)
+		close(scores)
+	}()
+
+	// Find the best model based on the highest score
+	var bestModel *NetworkConfig
+	bestScore := 0.0
+
+	for result := range results {
+		score := <-scores
+		if score > bestScore && result != nil {
+			bestModel = result
+			bestScore = score
+		}
+	}
+
+	if bestModel != nil {
+		fmt.Printf("Fallback: Found a model with an improvement score of %.2f\n", bestScore)
+		return bestModel
+	}
+
+	// Return nil if no improvements or matches are found
+	return nil
 }
 
 func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neuronRange [2]int, layerRange [2]int) *NetworkConfig {
@@ -728,4 +861,16 @@ func FlexibleCompareOutputs(result map[string]float64, expectedOutput map[string
 		return CompareOutputsWithTolerance(result, expectedOutput, tolerancePercentage)
 	}
 	return CompareOutputsStrict(result, expectedOutput)
+}
+
+// Calculate how much a result improves on the expected output
+func CalculateImprovementScore(result, expectedOutput map[string]float64) float64 {
+	score := 0.0
+	for key, expectedValue := range expectedOutput {
+		if resultValue, ok := result[key]; ok {
+			diff := math.Abs(expectedValue - resultValue)
+			score += (1.0 - diff) // Higher score for closer results (e.g., diff of 0 gives a score of 1)
+		}
+	}
+	return score / float64(len(expectedOutput)) // Return the average improvement score
 }
