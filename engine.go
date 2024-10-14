@@ -551,8 +551,6 @@ func GenerateChildren(
 			}
 		}
 	}
-
-	fmt.Println("All models evaluated.")
 }
 
 // Single-threaded version of the mutation and comparison loop
@@ -946,4 +944,112 @@ func CalculateImprovementScore(result, expectedOutput map[string]float64) float6
 		return 0.0
 	}
 	return score / float64(count) // Average relative improvement
+}
+
+// MoveChildrenToNextGeneration moves child models from the current generation to the next generation directory.
+// It skips moving a child model if it already exists in the next generation directory.
+// After moving, it resets the ParentModelIDs and ChildModelIDs in the child models.
+// It also updates the parent models to remove references to their children.
+func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) error {
+	// Determine the next generation number and directory
+	nextGenNumber := currentGenNumber + 1
+	nextGenDir := filepath.Join("./host/generations", fmt.Sprintf("%d", nextGenNumber))
+
+	// Create the next generation directory if it doesn't exist
+	if err := os.MkdirAll(nextGenDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create next generation directory %s: %w", nextGenDir, err)
+	}
+
+	// Read all files in the current generation directory
+	files, err := ioutil.ReadDir(currentGenDir)
+	if err != nil {
+		return fmt.Errorf("failed to read current generation directory %s: %w", currentGenDir, err)
+	}
+
+	for _, file := range files {
+		// Process only JSON files
+		if filepath.Ext(file.Name()) != ".json" {
+			continue
+		}
+
+		// Extract the model name without the extension
+		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+		modelFilePath := filepath.Join(currentGenDir, file.Name())
+		fmt.Printf("Processing Parent Model: %s\n", modelName)
+
+		// Load the parent model
+		parentModel, err := LoadModel(modelFilePath)
+		if err != nil {
+			fmt.Printf("Failed to load model %s: %v\n", modelFilePath, err)
+			continue
+		}
+
+		// Check if the model has any children
+		if len(parentModel.Metadata.ChildModelIDs) == 0 {
+			fmt.Printf("Parent Model %s has no children, skipping.\n", modelName)
+			continue
+		}
+
+		// Iterate over each child model ID
+		for _, childModelID := range parentModel.Metadata.ChildModelIDs {
+			childModelFileName := childModelID + ".json"
+			childModelFilePath := filepath.Join(currentGenDir, childModelFileName)
+			fmt.Printf("Processing Child Model: %s\n", childModelID)
+
+			// Check if the child model file exists in the current generation directory
+			if _, err := os.Stat(childModelFilePath); os.IsNotExist(err) {
+				fmt.Printf("Child model file %s does not exist in current generation, skipping.\n", childModelFilePath)
+				continue
+			}
+
+			// Define the new file path in the next generation directory
+			newChildModelFilePath := filepath.Join(nextGenDir, childModelFileName)
+
+			// **Check if the child model already exists in the next generation directory**
+			if _, err := os.Stat(newChildModelFilePath); err == nil {
+				fmt.Printf("Child model %s already exists in next generation directory, skipping move.\n", childModelID)
+				continue
+			}
+
+			// Load the child model
+			childModel, err := LoadModel(childModelFilePath)
+			if err != nil {
+				fmt.Printf("Failed to load child model %s: %v\n", childModelFilePath, err)
+				continue
+			}
+
+			// Reset the ParentModelIDs and ChildModelIDs in the child model
+			childModel.Metadata.ParentModelIDs = []string{}
+			childModel.Metadata.ChildModelIDs = []string{}
+
+			// Save the child model to the next generation directory
+			err = SaveModel(newChildModelFilePath, childModel)
+			if err != nil {
+				fmt.Printf("Failed to save child model to next generation: %v\n", err)
+				continue
+			}
+			fmt.Printf("Moved child model %s to next generation directory %s\n", childModelID, nextGenDir)
+
+			// Delete the original child model file from the current generation directory
+			/*err = os.Remove(childModelFilePath)
+			if err != nil {
+				fmt.Printf("Failed to delete child model file %s: %v\n", childModelFilePath, err)
+				// Continue processing other models even if deletion fails
+			}*/
+		}
+
+		// Clear the ChildModelIDs in the parent model after moving its children
+		parentModel.Metadata.ChildModelIDs = []string{}
+
+		// Save the updated parent model back to the current generation directory
+		/*err = SaveModel(modelFilePath, parentModel)
+		if err != nil {
+			fmt.Printf("Failed to save updated parent model %s: %v\n", modelFilePath, err)
+			continue
+		}*/
+		fmt.Printf("Cleared ChildModelIDs for parent model %s\n", modelName)
+	}
+
+	fmt.Println("All children moved to the next generation where applicable.")
+	return nil
 }

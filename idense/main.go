@@ -212,10 +212,11 @@ func main() {
 		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir)
 
 		dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
-		//GenCycleLocalTesting(generationDir, i)
-		//dense.DeleteAllFolders(generationDir)
+
+		dense.MoveChildrenToNextGeneration(generationDir, 0)
+		dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)
-		break
+		//break
 	}
 
 	return
