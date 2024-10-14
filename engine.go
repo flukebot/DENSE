@@ -1008,7 +1008,7 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int, ma
 		return fmt.Errorf("failed to read current generation directory %s: %w", currentGenDir, err)
 	}
 
-	// Initialize a counter for naming the child models sequentially
+	// Initialize a counter for naming the models sequentially
 	counter := 0
 
 	for _, file := range files {
@@ -1020,74 +1020,102 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int, ma
 		// Extract the model name without the extension
 		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
 		modelFilePath := filepath.Join(currentGenDir, file.Name())
-		fmt.Printf("Processing Parent Model: %s\n", modelName)
+		fmt.Printf("Processing Model: %s\n", modelName)
 
-		// Load the parent model
-		parentModel, err := LoadModel(modelFilePath)
+		// Load the model
+		model, err := LoadModel(modelFilePath)
 		if err != nil {
 			fmt.Printf("Failed to load model %s: %v\n", modelFilePath, err)
 			continue
 		}
 
-		// Check if the model has any children
-		if len(parentModel.Metadata.ChildModelIDs) == 0 {
-			fmt.Printf("Parent Model %s has no children, skipping.\n", modelName)
-			continue
-		}
+		// **Process Child Models if They Exist**
+		if len(model.Metadata.ChildModelIDs) > 0 {
+			// Iterate over each child model ID
+			for _, childModelID := range model.Metadata.ChildModelIDs {
+				// Define the new model name based on the counter
+				newModelName := fmt.Sprintf("model_%d", counter)
+				newChildModelFileName := newModelName + ".json"
+				newChildModelFilePath := filepath.Join(nextGenDir, newChildModelFileName)
 
-		// Iterate over each child model ID
-		for _, childModelID := range parentModel.Metadata.ChildModelIDs {
-			// Define the new model name based on the counter
-			newModelName := fmt.Sprintf("model_%d", counter)
-			newChildModelFileName := newModelName + ".json"
-			newChildModelFilePath := filepath.Join(nextGenDir, newChildModelFileName)
+				// Define the old child model file path
+				childModelFileName := childModelID + ".json"
+				childModelFilePath := filepath.Join(currentGenDir, childModelFileName)
+				fmt.Printf("Processing Child Model: %s\n", childModelID)
 
-			// Define the old child model file path
-			childModelFileName := childModelID + ".json"
-			childModelFilePath := filepath.Join(currentGenDir, childModelFileName)
-			fmt.Printf("Processing Child Model: %s\n", childModelID)
+				// Check if the child model file exists in the current generation directory
+				if _, err := os.Stat(childModelFilePath); os.IsNotExist(err) {
+					fmt.Printf("Child model file %s does not exist in current generation, skipping.\n", childModelFilePath)
+					continue
+				}
 
-			// Check if the child model file exists in the current generation directory
-			if _, err := os.Stat(childModelFilePath); os.IsNotExist(err) {
-				fmt.Printf("Child model file %s does not exist in current generation, skipping.\n", childModelFilePath)
-				continue
-			}
+				// Load the child model
+				childModel, err := LoadModel(childModelFilePath)
+				if err != nil {
+					fmt.Printf("Failed to load child model %s: %v\n", childModelFilePath, err)
+					continue
+				}
 
-			// **Check if the child model already exists in the next generation directory**
-			if _, err := os.Stat(newChildModelFilePath); err == nil {
-				fmt.Printf("Child model %s already exists in next generation directory as %s, skipping move.\n", childModelID, newChildModelFileName)
-				counter++ // Still increment the counter to reserve the name
-				// Optionally, check if counter has reached maxModels
+				// Reset the ParentModelIDs, ChildModelIDs, and accuracy-related metadata in the child model
+				childModel.Metadata.ParentModelIDs = []string{}
+				childModel.Metadata.ChildModelIDs = []string{}
+				childModel.Metadata.Evaluated = false
+				childModel.Metadata.LastTestAccuracy = 0.0 // Reset accuracy
+
+				// Save the child model to the next generation directory with the new name
+				err = SaveModel(newChildModelFilePath, childModel)
+				if err != nil {
+					fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+					continue
+				}
+				fmt.Printf("Moved child model %s to next generation directory as %s\n", childModelID, newChildModelFileName)
+
+				// Increment the counter
+				counter++
+
+				// Check if the counter has reached the maximum number of models for this generation
 				if counter >= maxModels {
 					fmt.Println("Reached maximum number of models for this generation.")
 					return nil
 				}
-				continue
 			}
 
-			// Load the child model
-			childModel, err := LoadModel(childModelFilePath)
+			// Clear the ChildModelIDs in the parent model after moving its children
+			model.Metadata.ChildModelIDs = []string{}
+
+			// Reset accuracy-related metadata in the parent model
+			model.Metadata.Evaluated = false
+			model.Metadata.LastTestAccuracy = 0.0 // Reset accuracy
+
+			// Save the updated parent model back to the current generation directory
+			err = SaveModel(modelFilePath, model)
 			if err != nil {
-				fmt.Printf("Failed to load child model %s: %v\n", childModelFilePath, err)
+				fmt.Printf("Failed to save updated parent model %s: %v\n", modelFilePath, err)
 				continue
 			}
+			fmt.Printf("Cleared ChildModelIDs and reset metadata for parent model %s\n", modelName)
 
-			// Reset the ParentModelIDs and ChildModelIDs in the child model
-			childModel.Metadata.ParentModelIDs = []string{}
-			childModel.Metadata.ChildModelIDs = []string{}
-			childModel.Metadata.Evaluated = false
+		} else {
+			// **Parent Model Has No Children—Move It to Next Generation**
 
-			// Optionally, reset other metadata fields if necessary
-			// For example:
-			// childModel.Metadata.GenerationNumber = nextGenNumber
+			// Define the new model name based on the counter
+			newModelName := fmt.Sprintf("model_%d", counter)
+			newModelFileName := newModelName + ".json"
+			newModelFilePath := filepath.Join(nextGenDir, newModelFileName)
 
-			// Save the child model to the next generation directory with the new name
-			err = SaveModel(newChildModelFilePath, childModel)
+			// Reset the ParentModelIDs, ChildModelIDs, and accuracy-related metadata in the model
+			model.Metadata.ParentModelIDs = []string{}
+			model.Metadata.ChildModelIDs = []string{}
+			model.Metadata.Evaluated = false
+			model.Metadata.LastTestAccuracy = 0.0 // Reset accuracy
+
+			// Save the model to the next generation directory with the new name
+			err = SaveModel(newModelFilePath, model)
 			if err != nil {
-				fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+				fmt.Printf("Failed to save model to next generation as %s: %v\n", newModelFileName, err)
 				continue
 			}
-			fmt.Printf("Moved child model %s to next generation directory as %s\n", childModelID, newChildModelFileName)
+			fmt.Printf("Moved model %s to next generation directory as %s\n", modelName, newModelFileName)
 
 			// Increment the counter
 			counter++
@@ -1095,33 +1123,11 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int, ma
 			// Check if the counter has reached the maximum number of models for this generation
 			if counter >= maxModels {
 				fmt.Println("Reached maximum number of models for this generation.")
-				break
+				return nil
 			}
-
-			// Optionally, delete the original child model file from the current generation directory
-			/*
-			   err = os.Remove(childModelFilePath)
-			   if err != nil {
-			       fmt.Printf("Failed to delete child model file %s: %v\n", childModelFilePath, err)
-			       // Continue processing other models even if deletion fails
-			   }
-			*/
 		}
-
-		// Clear the ChildModelIDs in the parent model after moving its children
-		parentModel.Metadata.ChildModelIDs = []string{}
-
-		// Save the updated parent model back to the current generation directory
-		/*
-		   err = SaveModel(modelFilePath, parentModel)
-		   if err != nil {
-		       fmt.Printf("Failed to save updated parent model %s: %v\n", modelFilePath, err)
-		       continue
-		   }
-		*/
-		fmt.Printf("Cleared ChildModelIDs for parent model %s\n", modelName)
 	}
 
-	fmt.Println("All children moved to the next generation where applicable.")
+	fmt.Println("All models moved to the next generation where applicable.")
 	return nil
 }
