@@ -93,10 +93,10 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 		}
 
 		// **Check if the model is a child model**
-		if len(modelConfig.Metadata.ParentModelIDs) > 0 {
+		/*if len(modelConfig.Metadata.ParentModelIDs) > 0 {
 			fmt.Printf("Model %s is a child model, skipping SaveLayerStates.\n", modelName)
 			continue
-		}
+		}*/
 
 		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
 
@@ -199,10 +199,10 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 		}
 
 		// **Check if the model is a child model**
-		if len(modelConfig.Metadata.ParentModelIDs) > 0 {
+		/*if len(modelConfig.Metadata.ParentModelIDs) > 0 {
 			fmt.Printf("Model %s is a child model, skipping evaluation.\n", modelName)
 			continue
-		}
+		}*/
 
 		// Check if the model has already been evaluated, if so, skip it
 		if modelConfig.Metadata.Evaluated {
@@ -458,10 +458,10 @@ func GenerateChildren(
 		}
 
 		// Check if the model already has children
-		if len(modelConfig.Metadata.ChildModelIDs) > 0 {
+		/*if len(modelConfig.Metadata.ChildModelIDs) > 0 {
 			fmt.Printf("Model %s already has children, skipping mutation.\n", modelName)
 			continue
-		}
+		}*/
 
 		// Proceed only if the model does not have any children
 		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
@@ -1021,6 +1021,7 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) er
 			// Reset the ParentModelIDs and ChildModelIDs in the child model
 			childModel.Metadata.ParentModelIDs = []string{}
 			childModel.Metadata.ChildModelIDs = []string{}
+			childModel.Metadata.Evaluated = false
 
 			// Save the child model to the next generation directory
 			err = SaveModel(newChildModelFilePath, childModel)
