@@ -213,7 +213,7 @@ func main() {
 
 		dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
 
-		dense.MoveChildrenToNextGeneration(generationDir, 0)
+		dense.MoveChildrenToNextGeneration(generationDir, i)
 		dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)
 		//break
