@@ -484,13 +484,16 @@ func GenerateChildren(
 	tries int,
 	allowForTolerance bool,
 	tolerancePercentage float64,
-) {
+) bool {
 	fmt.Println("---------Attempting to generate children------------")
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {
 		fmt.Printf("Failed to read models directory: %v\n", err)
-		return
+		return false
 	}
+
+	// Variable to track if any improvements were found
+	improvementsFound := false
 
 	for _, value := range files {
 		if filepath.Ext(value.Name()) != ".json" {
@@ -573,6 +576,9 @@ func GenerateChildren(
 			if bestModel != nil && bestScore > 0.0 {
 				fmt.Println("Best matching or improved model found.")
 
+				// **Set improvementsFound to true**
+				improvementsFound = true
+
 				// Generate a unique ModelID for the child
 				childModelID := GenerateUniqueModelID(modelConfig.Metadata.ModelID)
 
@@ -605,6 +611,9 @@ func GenerateChildren(
 			}
 		}
 	}
+
+	// **Return whether any improvements were found**
+	return improvementsFound
 }
 
 // Single-threaded version of the mutation and comparison loop

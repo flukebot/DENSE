@@ -204,6 +204,8 @@ func main() {
 	neuronRange := [2]int{10, 128} // Min and max neurons or filters
 	layerRange := [2]int{1, 5}     // Min and max layers
 
+	noImprovementCounter := 0
+
 	for i := 0; i <= generationNum; i++ {
 		generationDir := "./host/generations/" + strconv.Itoa(i)
 		fmt.Println("----CURENT GEN---", generationDir)
@@ -211,7 +213,24 @@ func main() {
 		dense.SaveLayerStates(generationDir, &testDataInterface, mnistDir)
 		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
-		dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
+		// **Capture the return value of GenerateChildren**
+		improvementsFound := dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
+
+		// **Update the noImprovementCounter based on improvementsFound**
+		if improvementsFound {
+			noImprovementCounter = 0 // Reset counter if improvements were found
+		} else {
+			noImprovementCounter++ // Increment counter if no improvements were found
+		}
+
+		// **Check if the counter has reached the threshold**
+		if noImprovementCounter >= 5 {
+			// Increase the neuron range
+			neuronRange[1] += 10 // Increase the max neurons by 10 (adjust as needed)
+			neuronRange[0] += 5
+			fmt.Printf("No improvements for %d generations. Increasing neuronRange to: %v\n", noImprovementCounter, neuronRange)
+			noImprovementCounter = 0 // Reset the counter after adjustment
+		}
 
 		dense.MoveChildrenToNextGeneration(generationDir, i, 100)
 		//dense.DeleteAllFolders(generationDir)
