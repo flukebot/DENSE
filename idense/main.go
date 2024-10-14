@@ -209,11 +209,11 @@ func main() {
 		fmt.Println("----CURENT GEN---", generationDir)
 
 		dense.SaveLayerStates(generationDir, &testDataInterface, mnistDir)
-		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir)
+		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
 		dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
 
-		dense.MoveChildrenToNextGeneration(generationDir, i)
+		dense.MoveChildrenToNextGeneration(generationDir, i, 100)
 		//dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)
 		//break

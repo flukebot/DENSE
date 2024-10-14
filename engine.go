@@ -168,7 +168,7 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 	fmt.Println("All models processed.")
 }
 
-func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string) {
+func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string, allowIncremental bool) {
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {
 		fmt.Printf("Failed to read models directory: %v\n", err)
@@ -195,18 +195,15 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 		modelConfig, err := LoadModel(modelFilePath)
 		if err != nil {
 			fmt.Println("Failed to load model:", err)
-			return
+			continue
 		}
 
 		// **Check if the model is a child model**
-		/*if len(modelConfig.Metadata.ParentModelIDs) > 0 {
-			fmt.Printf("Model %s is a child model, skipping evaluation.\n", modelName)
-			continue
-		}*/
+		isChildModel := len(modelConfig.Metadata.ParentModelIDs) > 0
 
-		// Check if the model has already been evaluated, if so, skip it
-		if modelConfig.Metadata.Evaluated {
-			fmt.Printf("Model %s has already been evaluated, skipping...\n", modelName)
+		// **Conditionally skip evaluation**
+		if !isChildModel && modelConfig.Metadata.Evaluated {
+			fmt.Printf("Parent Model %s has already been evaluated, skipping...\n", modelName)
 			continue
 		}
 
@@ -228,8 +225,8 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 		// WaitGroup to wait for all goroutines to finish
 		var wg sync.WaitGroup
 
-		// This will store the results (0 or 1) for each data item
-		results := make(chan int, len(*data))
+		// Channel to store the evaluation results
+		results := make(chan float64, len(*data))
 
 		// Loop through the data and launch a goroutine for each item
 		for _, v := range *data {
@@ -269,16 +266,32 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 					// Run the evaluation starting from the saved layer state
 					result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
 
-					// Compare the results and store the prediction status
-					isCorrect := CompareOutputs(result, actualOutput)
-					if isCorrect {
-						results <- 1
-					} else {
-						results <- 0
-					}
+					if allowIncremental {
+						// Calculate the similarity score
+						similarityScore := CalculateSimilarityScore(result, actualOutput)
 
-					// Save the learned status (true if correct, false if incorrect)
-					SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+						// Convert the similarity score to a value between 0.0 and 1.0
+						perItemScore := similarityScore / 100.0
+
+						// Send the per-item score to the results channel
+						results <- perItemScore
+
+						// Optionally, determine if the model "learned" based on a threshold
+						// For example, consider it learned if similarity is above 90%
+						isCorrect := similarityScore >= 90.0 // Example threshold
+						SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+					} else {
+						// Compare the results and store the prediction status
+						isCorrect := CompareOutputs(result, actualOutput)
+						if isCorrect {
+							results <- 1.0
+						} else {
+							results <- 0.0
+						}
+
+						// Save the learned status (true if correct, false if incorrect)
+						SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+					}
 				}
 			}(v)
 		}
@@ -287,35 +300,44 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 		wg.Wait()
 		close(results)
 
-		// Tally up the correct results
-		totalCorrect := 0
-		totalData := len(*data)
+		// Tally up the results
+		var totalScore float64
+		totalData := 0
 
 		for res := range results {
-			totalCorrect += res
+			totalScore += res
+			totalData++
 		}
 
-		// Print and save the accuracy for this model
+		// Calculate average accuracy
 		if totalData > 0 {
-			accuracy := float64(totalCorrect) / float64(totalData)
-			fmt.Printf("Model %s accuracy: %.2f%% (%d/%d)\n", modelName, accuracy*100, totalCorrect, totalData)
-
-			// Save the accuracy and mark the model as evaluated
-			modelConfig.Metadata.LastTestAccuracy = accuracy
-			modelConfig.Metadata.Evaluated = true // Mark the model as evaluated
-
-			// Save the updated model configuration
-			if err := SaveModel(modelFilePath, modelConfig); err != nil {
-				fmt.Printf("Failed to save updated model with accuracy: %v\n", err)
+			averageAccuracy := (totalScore / float64(totalData)) * 100.0
+			if allowIncremental {
+				fmt.Printf("Model %s average similarity score: %.8f%% (%0.8f/%d)\n", modelName, averageAccuracy, totalScore, totalData)
 			} else {
-				fmt.Printf("Updated model %s with accuracy %.2f%% and marked as evaluated.\n", modelName, accuracy*100)
+				fmt.Printf("Model %s accuracy: %.2f%% (%d/%d)\n", modelName, averageAccuracy, int(totalScore), totalData)
+			}
+
+			if !isChildModel {
+				// Save the accuracy and mark the model as evaluated only if it's a parent model
+				modelConfig.Metadata.LastTestAccuracy = averageAccuracy
+				modelConfig.Metadata.Evaluated = true // Mark the parent model as evaluated
+
+				// Save the updated model configuration
+				if err := SaveModel(modelFilePath, modelConfig); err != nil {
+					fmt.Printf("Failed to save updated model with accuracy: %v\n", err)
+				} else {
+					if allowIncremental {
+						fmt.Printf("Updated model %s with average similarity score %.2f%% and marked as evaluated.\n", modelName, averageAccuracy)
+					} else {
+						fmt.Printf("Updated model %s with accuracy %.2f%% and marked as evaluated.\n", modelName, averageAccuracy)
+					}
+				}
 			}
 		} else {
 			fmt.Println("No data to evaluate accuracy.")
 		}
 	}
-
-	fmt.Println("All models evaluated.")
 }
 
 // Helper function to compare two output maps
@@ -332,6 +354,38 @@ func CompareOutputs(predicted, actual map[string]float64) bool {
 	}
 
 	return true
+}
+
+// CalculateSimilarityScore calculates the similarity between predicted and actual outputs.
+// It returns a percentage representing how close the predicted outputs are to the actual outputs.
+func CalculateSimilarityScore(predicted, actual map[string]float64) float64 {
+	if len(predicted) == 0 || len(actual) == 0 {
+		return 0.0
+	}
+
+	totalAbsoluteError := 0.0
+	for key, actualValue := range actual {
+		predictedValue, exists := predicted[key]
+		if !exists {
+			totalAbsoluteError += 1.0 // Assuming outputs are normalized between 0 and 1
+			continue
+		}
+		difference := math.Abs(predictedValue - actualValue)
+		totalAbsoluteError += difference
+	}
+
+	mae := totalAbsoluteError / float64(len(actual))
+	// Convert MAE to similarity score
+	similarity := (1.0 - mae) * 100.0
+
+	// Ensure similarity is between 0 and 100
+	if similarity < 0 {
+		similarity = 0.0
+	} else if similarity > 100.0 {
+		similarity = 100.0
+	}
+
+	return similarity
 }
 
 func EvaluateSingleModelAccuracy(modelConfig *NetworkConfig, data *[]interface{}, layerStateNumber int, generationDir string) (float64, error) {
@@ -740,15 +794,7 @@ func PerformMutationsMultiThreadedWithFallback(
 			// Continue the feedforward process with the mutated model
 			mutatedResult := ContinueFeedforward(mutatedModel, savedLayerData, layerStateNumber)
 
-			// Compare the results with the expected output map
-			if FlexibleCompareOutputs(mutatedResult, outputMap, allowForTolerance, tolerancePercentage) {
-				fmt.Printf("Try %d: Found matching output!\n", try+1)
-				// Assign a high score for exact match
-				results <- modelResult{mutatedModel, 1.0}
-				return
-			}
-
-			// Calculate improvement score
+			// Calculate improvement score (similarity)
 			improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
 
 			// Log the improvement score for debugging
@@ -780,7 +826,6 @@ func PerformMutationsMultiThreadedWithFallback(
 	mainModelConfig, err := LoadModel(mainModelFilePath)
 	if err != nil {
 		fmt.Println("Failed to load main model:", err)
-		// Depending on your use case, you might want to return bestMutatedModel here
 		return bestMutatedModel, bestMutatedScore
 	}
 
@@ -788,22 +833,16 @@ func PerformMutationsMultiThreadedWithFallback(
 	mainModelScore := CalculateImprovementScore(mainModelResult, outputMap)
 
 	// Log the main model's score
-	fmt.Printf("Main Model Improvement Score: %.4f\n", mainModelScore)
+	fmt.Printf("Main Model Similarity Score: %.4f\n", mainModelScore)
 
 	// If there is a best mutated model, compare its score with the main model's score
 	if bestMutatedModel != nil {
-		mutatedModelResult := ContinueFeedforward(bestMutatedModel, savedLayerData, layerStateNumber)
-		mutatedModelScore := CalculateImprovementScore(mutatedModelResult, outputMap)
-
-		fmt.Printf("Best Mutated Model Improvement Score: %.4f\n", mutatedModelScore)
+		fmt.Printf("Best Mutated Model Similarity Score: %.4f\n", bestMutatedScore)
 
 		// Compare the improvement scores
-		if mutatedModelScore > mainModelScore {
-			fmt.Println("Mutated model has a higher improvement score than the main model.")
-			return bestMutatedModel, mutatedModelScore
-		} else if mutatedModelScore > 0 {
-			fmt.Println("Mutated model has a positive improvement score but does not surpass the main model.")
-			return bestMutatedModel, mutatedModelScore
+		if bestMutatedScore > mainModelScore {
+			fmt.Println("Mutated model has higher similarity score than the main model.")
+			return bestMutatedModel, bestMutatedScore
 		} else {
 			fmt.Println("Mutated model does not provide any improvement.")
 			return nil, 0.0 // Indicate that no improvement was found
@@ -921,36 +960,39 @@ func FlexibleCompareOutputs(result map[string]float64, expectedOutput map[string
 	return CompareOutputsStrict(result, expectedOutput)
 }
 
-// Calculate how much a result improves on the expected output
-func CalculateImprovementScore(result, expectedOutput map[string]float64) float64 {
-	score := 0.0
-	count := 0
-	for key, expectedValue := range expectedOutput {
-		if resultValue, ok := result[key]; ok {
-			// Calculate the relative improvement
-			if expectedValue != 0 {
-				relativeImprovement := (resultValue - expectedValue) / math.Abs(expectedValue)
-				score += relativeImprovement
-			} else {
-				// Handle expectedValue == 0 to avoid division by zero
-				if resultValue != 0 {
-					score += 1.0 // Arbitrary positive value for improvement
-				}
-			}
-			count++
-		}
-	}
-	if count == 0 {
+// CalculateImprovementScore calculates the reduction in error between the result and expectedOutput.
+// A higher score indicates a better match (lower error).
+func CalculateImprovementScoreOLD(result, expectedOutput map[string]float64) float64 {
+	if len(result) == 0 || len(expectedOutput) == 0 {
 		return 0.0
 	}
-	return score / float64(count) // Average relative improvement
+
+	totalSquaredError := 0.0
+	for key, expectedValue := range expectedOutput {
+		resultValue, exists := result[key]
+		if !exists {
+			totalSquaredError += 1.0 // Maximum error assumed
+			continue
+		}
+		difference := resultValue - expectedValue
+		totalSquaredError += difference * difference
+	}
+
+	mse := totalSquaredError / float64(len(expectedOutput))
+
+	// We can use negative MSE as the score so that lower MSE results in a higher score
+	return -mse
+}
+
+func CalculateImprovementScore(result, expectedOutput map[string]float64) float64 {
+	return CalculateSimilarityScore(result, expectedOutput)
 }
 
 // MoveChildrenToNextGeneration moves child models from the current generation to the next generation directory.
 // It skips moving a child model if it already exists in the next generation directory.
 // After moving, it resets the ParentModelIDs and ChildModelIDs in the child models.
 // It also updates the parent models to remove references to their children.
-func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) error {
+func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int, maxModels int) error {
 	// Determine the next generation number and directory
 	nextGenNumber := currentGenNumber + 1
 	nextGenDir := filepath.Join("./host/generations", fmt.Sprintf("%d", nextGenNumber))
@@ -965,6 +1007,9 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) er
 	if err != nil {
 		return fmt.Errorf("failed to read current generation directory %s: %w", currentGenDir, err)
 	}
+
+	// Initialize a counter for naming the child models sequentially
+	counter := 0
 
 	for _, file := range files {
 		// Process only JSON files
@@ -992,6 +1037,12 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) er
 
 		// Iterate over each child model ID
 		for _, childModelID := range parentModel.Metadata.ChildModelIDs {
+			// Define the new model name based on the counter
+			newModelName := fmt.Sprintf("model_%d", counter)
+			newChildModelFileName := newModelName + ".json"
+			newChildModelFilePath := filepath.Join(nextGenDir, newChildModelFileName)
+
+			// Define the old child model file path
 			childModelFileName := childModelID + ".json"
 			childModelFilePath := filepath.Join(currentGenDir, childModelFileName)
 			fmt.Printf("Processing Child Model: %s\n", childModelID)
@@ -1002,12 +1053,15 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) er
 				continue
 			}
 
-			// Define the new file path in the next generation directory
-			newChildModelFilePath := filepath.Join(nextGenDir, childModelFileName)
-
 			// **Check if the child model already exists in the next generation directory**
 			if _, err := os.Stat(newChildModelFilePath); err == nil {
-				fmt.Printf("Child model %s already exists in next generation directory, skipping move.\n", childModelID)
+				fmt.Printf("Child model %s already exists in next generation directory as %s, skipping move.\n", childModelID, newChildModelFileName)
+				counter++ // Still increment the counter to reserve the name
+				// Optionally, check if counter has reached maxModels
+				if counter >= maxModels {
+					fmt.Println("Reached maximum number of models for this generation.")
+					return nil
+				}
 				continue
 			}
 
@@ -1023,31 +1077,48 @@ func MoveChildrenToNextGeneration(currentGenDir string, currentGenNumber int) er
 			childModel.Metadata.ChildModelIDs = []string{}
 			childModel.Metadata.Evaluated = false
 
-			// Save the child model to the next generation directory
+			// Optionally, reset other metadata fields if necessary
+			// For example:
+			// childModel.Metadata.GenerationNumber = nextGenNumber
+
+			// Save the child model to the next generation directory with the new name
 			err = SaveModel(newChildModelFilePath, childModel)
 			if err != nil {
-				fmt.Printf("Failed to save child model to next generation: %v\n", err)
+				fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
 				continue
 			}
-			fmt.Printf("Moved child model %s to next generation directory %s\n", childModelID, nextGenDir)
+			fmt.Printf("Moved child model %s to next generation directory as %s\n", childModelID, newChildModelFileName)
 
-			// Delete the original child model file from the current generation directory
-			/*err = os.Remove(childModelFilePath)
-			if err != nil {
-				fmt.Printf("Failed to delete child model file %s: %v\n", childModelFilePath, err)
-				// Continue processing other models even if deletion fails
-			}*/
+			// Increment the counter
+			counter++
+
+			// Check if the counter has reached the maximum number of models for this generation
+			if counter >= maxModels {
+				fmt.Println("Reached maximum number of models for this generation.")
+				break
+			}
+
+			// Optionally, delete the original child model file from the current generation directory
+			/*
+			   err = os.Remove(childModelFilePath)
+			   if err != nil {
+			       fmt.Printf("Failed to delete child model file %s: %v\n", childModelFilePath, err)
+			       // Continue processing other models even if deletion fails
+			   }
+			*/
 		}
 
 		// Clear the ChildModelIDs in the parent model after moving its children
 		parentModel.Metadata.ChildModelIDs = []string{}
 
 		// Save the updated parent model back to the current generation directory
-		/*err = SaveModel(modelFilePath, parentModel)
-		if err != nil {
-			fmt.Printf("Failed to save updated parent model %s: %v\n", modelFilePath, err)
-			continue
-		}*/
+		/*
+		   err = SaveModel(modelFilePath, parentModel)
+		   if err != nil {
+		       fmt.Printf("Failed to save updated parent model %s: %v\n", modelFilePath, err)
+		       continue
+		   }
+		*/
 		fmt.Printf("Cleared ChildModelIDs for parent model %s\n", modelName)
 	}
 
