@@ -92,6 +92,12 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 			return
 		}
 
+		// **Check if the model is a child model**
+		if len(modelConfig.Metadata.ParentModelIDs) > 0 {
+			fmt.Printf("Model %s is a child model, skipping SaveLayerStates.\n", modelName)
+			continue
+		}
+
 		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
 
 		// Construct the shard folder path inside the model's folder
@@ -190,6 +196,12 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 		if err != nil {
 			fmt.Println("Failed to load model:", err)
 			return
+		}
+
+		// **Check if the model is a child model**
+		if len(modelConfig.Metadata.ParentModelIDs) > 0 {
+			fmt.Printf("Model %s is a child model, skipping evaluation.\n", modelName)
+			continue
 		}
 
 		// Check if the model has already been evaluated, if so, skip it
@@ -409,17 +421,22 @@ func EvaluateSingleModelAccuracy(modelConfig *NetworkConfig, data *[]interface{}
 	}
 }
 
-func GenerateChildren(generationDir string, data *[]interface{}, mutationTypes []string, neuronRange [2]int, layerRange [2]int, tries int, allowForTolerance bool, tolerancePercentage float64) {
+func GenerateChildren(
+	generationDir string,
+	data *[]interface{},
+	mutationTypes []string,
+	neuronRange [2]int,
+	layerRange [2]int,
+	tries int,
+	allowForTolerance bool,
+	tolerancePercentage float64,
+) {
 	fmt.Println("---------Attempting to generate children------------")
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {
 		fmt.Printf("Failed to read models directory: %v\n", err)
 		return
 	}
-
-	// Get the number of available CPU cores and create a semaphore based on this number
-	//numCores := runtime.NumCPU()
-	//semaphore := make(chan struct{}, numCores)
 
 	for _, value := range files {
 		if filepath.Ext(value.Name()) != ".json" {
@@ -437,105 +454,102 @@ func GenerateChildren(generationDir string, data *[]interface{}, mutationTypes [
 		modelConfig, err := LoadModel(modelFilePath)
 		if err != nil {
 			fmt.Println("Failed to load model:", err)
-			return
+			continue
 		}
 
-		// Check if the model has already been evaluated, if so, skip it
-		if modelConfig.Metadata.Evaluated {
-			//fmt.Printf("Model %s has already been evaluated, skipping...\n", modelName)
-			layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+		// Check if the model already has children
+		if len(modelConfig.Metadata.ChildModelIDs) > 0 {
+			fmt.Printf("Model %s already has children, skipping mutation.\n", modelName)
+			continue
+		}
 
-			// Construct the shard folder path inside the model's folder
-			modelFolderPath := filepath.Join(generationDir, modelName)
-			shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+		// Proceed only if the model does not have any children
+		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
 
-			// Check if the shard folder for this layer exists
-			if _, err := os.Stat(shardFolderPath); os.IsNotExist(err) {
-				fmt.Printf("Shard folder for layer %d does not exist in model %s, skipping...\n", layerStateNumber, modelName)
+		// Construct the shard folder path inside the model's folder
+		modelFolderPath := filepath.Join(generationDir, modelName)
+		shardFolderPath := filepath.Join(modelFolderPath, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+
+		// Check if the shard folder for this layer exists
+		if _, err := os.Stat(shardFolderPath); os.IsNotExist(err) {
+			fmt.Printf("Shard folder for layer %d does not exist in model %s, skipping...\n", layerStateNumber, modelName)
+			continue
+		}
+
+		// Find shards that haven't learned yet
+		modelFilePathFolder := strings.TrimSuffix(modelFilePath, filepath.Ext(modelFilePath))
+		highestFolder, err := FindHighestNumberedFolder(modelFilePathFolder, "layer", "learnedornot")
+		if err != nil {
+			fmt.Println("Error finding highest numbered folder:", err)
+			continue
+		}
+		layerOfNotLearned := filepath.Join(modelFilePathFolder, highestFolder)
+		lstEvalsTryingToLearn, _ := GetFilesWithExtension(layerOfNotLearned, ".false", 1, false)
+
+		for indexShards, dataShard := range lstEvalsTryingToLearn {
+			updated := strings.TrimPrefix(dataShard, "input_")
+			fmt.Println(indexShards, dataShard)
+
+			// Load the saved layer state
+			savedLayerData := LoadShardedLayerState(modelFilePath, layerStateNumber, updated)
+
+			// Get the expected output map for the current shard
+			outputMap, err := GetOutputByFileName(data, updated)
+			if err != nil {
+				fmt.Println("Error fetching output map:", err)
 				continue
-			} else {
-				modelFilePathFolder := strings.TrimSuffix(modelFilePath, filepath.Ext(modelFilePath))
-				highestFolder, err := FindHighestNumberedFolder(modelFilePathFolder, "layer", "learnedornot")
-				if err != nil {
-					fmt.Println("Error running highest folder")
-					continue
-				}
-				layerOfNotLearned := filepath.Join(modelFilePathFolder, highestFolder)
-				lstEvalsTryingToLearn, _ := GetFilesWithExtension(layerOfNotLearned, ".false", 1, false)
-				//fmt.Println(lstEvalsTryingToLearn)
-
-				for indexShards, dataShard := range lstEvalsTryingToLearn {
-					updated := strings.TrimPrefix(dataShard, "input_")
-					fmt.Println(indexShards, dataShard)
-					//fmt.Println(modelFilePathFolder + "/layer_" + strconv.Itoa(layerNum) + "_shards/" + dataShard + ".csv")
-
-					//inputIDNumber, _ := ExtractDigitsToInt(dataShard)
-					savedLayerData := LoadShardedLayerState(modelFilePath, layerStateNumber, updated)
-
-					// Call the function to get the output map
-					outputMap, err := GetOutputByFileName(data, updated)
-					if err != nil {
-						fmt.Println("Error:", err)
-					} else {
-						//fmt.Println("Found OutputMap:", outputMap)
-
-						// Perform mutations sequentially and get the matching models
-						//matchingModels := PerformMutations(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
-						/*matchingModels := PerformMutationsMultiThreadedWithFallback(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
-						// Loop over the results and handle the matching models
-						if len(matchingModels) > 0 {
-							fmt.Println("Found matching models:")
-							for _, model := range matchingModels {
-								fmt.Println(model)
-							}
-						} else {
-							fmt.Println("No matching models found.")
-						}*/
-
-						/*if tries <= 0 {
-							tries = 100 // Default value for tries if not provided
-						}
-
-						// Loop over the number of tries to apply mutation and compare
-						for i := 0; i < tries; i++ {
-							modelConfig, err := LoadModel(modelFilePathFolder + ".json")
-							if err != nil {
-								fmt.Println("Failed to load model:", err)
-								continue
-							}
-
-							// Apply mutation
-							mutatedModel := ApplySingleMutation(modelConfig, mutationTypes, neuronRange, layerRange)
-
-							// Continue the feedforward process with the mutated model
-							mutatedResult := ContinueFeedforward(mutatedModel, savedLayerData, layerStateNumber)
-
-							// Compare the results with the expected output map
-							if FlexibleCompareOutputs(mutatedResult, outputMap, allowForTolerance, tolerancePercentage) {
-								fmt.Printf("Try %d: Found matching output!\n", i+1)
-							} else {
-								fmt.Printf("Try %d: Output does not match.\n", i+1)
-							}
-						}*/
-
-						// Perform mutations and use fallback to get the best matching model
-						bestModel := PerformMutationsMultiThreadedWithFallback(generationDir, tries, modelFilePathFolder, savedLayerData, layerStateNumber, mutationTypes, neuronRange, layerRange, outputMap, allowForTolerance, tolerancePercentage)
-
-						// Check if we found a matching or improved model
-						if bestModel != nil {
-							fmt.Println("Best matching or improved model found:")
-							//fmt.Println(bestModel)
-						} else {
-							fmt.Println("No matching or improved model found.")
-						}
-
-					}
-
-				}
 			}
 
-		}
+			// Perform mutations and get the best mutated model along with its score
+			bestModel, bestScore := PerformMutationsMultiThreadedWithFallback(
+				generationDir,
+				tries,
+				modelFilePathFolder,
+				savedLayerData,
+				layerStateNumber,
+				mutationTypes,
+				neuronRange,
+				layerRange,
+				outputMap,
+				allowForTolerance,
+				tolerancePercentage,
+			)
 
+			// Check if a better model was found
+			if bestModel != nil && bestScore > 0.0 {
+				fmt.Println("Best matching or improved model found.")
+
+				// Generate a unique ModelID for the child
+				childModelID := GenerateUniqueModelID(modelConfig.Metadata.ModelID)
+
+				// Update child model's metadata
+				bestModel.Metadata.ModelID = childModelID
+				bestModel.Metadata.ParentModelIDs = append(bestModel.Metadata.ParentModelIDs, modelConfig.Metadata.ModelID)
+				bestModel.Metadata.ChildModelIDs = []string{} // Initialize as it may have its own children in future
+
+				// Save the child model
+				childModelFilePath := filepath.Join(generationDir, childModelID+".json")
+				err = SaveModel(childModelFilePath, bestModel)
+				if err != nil {
+					fmt.Printf("Failed to save child model %s: %v\n", childModelID, err)
+					continue
+				}
+				fmt.Printf("Saved child model %s to %s\n", childModelID, childModelFilePath)
+
+				// Update parent's ChildModelIDs
+				modelConfig.Metadata.ChildModelIDs = append(modelConfig.Metadata.ChildModelIDs, childModelID)
+
+				// Save the updated parent model
+				err = SaveModel(modelFilePath, modelConfig)
+				if err != nil {
+					fmt.Printf("Failed to update parent model %s: %v\n", modelName, err)
+					continue
+				}
+				fmt.Printf("Updated parent model %s with child model ID %s\n", modelName, childModelID)
+			} else {
+				fmt.Println("No matching or improved model found.")
+			}
+		}
 	}
 
 	fmt.Println("All models evaluated.")
@@ -683,14 +697,29 @@ func PerformMutations(generationDir string, tries int, modelFilePathFolder strin
 	return matchingModels
 }
 
-// Multi-threaded mutation with fallback to find at least micro improvements
-func PerformMutationsMultiThreadedWithFallback(generationDir string, tries int, modelFilePathFolder string, savedLayerData interface{}, layerStateNumber int, mutationTypes []string, neuronRange [2]int, layerRange [2]int, outputMap map[string]float64, allowForTolerance bool, tolerancePercentage float64) *NetworkConfig {
+func PerformMutationsMultiThreadedWithFallback(
+	generationDir string,
+	tries int,
+	modelFilePathFolder string,
+	savedLayerData interface{},
+	layerStateNumber int,
+	mutationTypes []string,
+	neuronRange [2]int,
+	layerRange [2]int,
+	outputMap map[string]float64,
+	allowForTolerance bool,
+	tolerancePercentage float64,
+) (*NetworkConfig, float64) { // Return score as well
 	if tries <= 0 {
 		tries = 100 // Default value for tries if not provided
 	}
 
-	results := make(chan *NetworkConfig, tries)
-	scores := make(chan float64, tries)
+	// Channel to collect results: model and its score
+	type modelResult struct {
+		model *NetworkConfig
+		score float64
+	}
+	results := make(chan modelResult, tries)
 	var wg sync.WaitGroup
 
 	// Launch goroutines for each try
@@ -703,8 +732,7 @@ func PerformMutationsMultiThreadedWithFallback(generationDir string, tries int, 
 			modelConfig, err := LoadModel(modelFilePathFolder + ".json")
 			if err != nil {
 				fmt.Println("Failed to load model:", err)
-				results <- nil // Send nil if there's an error
-				scores <- 0.0
+				results <- modelResult{nil, 0.0}
 				return
 			}
 
@@ -717,15 +745,18 @@ func PerformMutationsMultiThreadedWithFallback(generationDir string, tries int, 
 			// Compare the results with the expected output map
 			if FlexibleCompareOutputs(mutatedResult, outputMap, allowForTolerance, tolerancePercentage) {
 				fmt.Printf("Try %d: Found matching output!\n", try+1)
-				results <- mutatedModel // Send matching model
-				scores <- 1.0           // Use perfect score for exact match
+				// Assign a high score for exact match
+				results <- modelResult{mutatedModel, 1.0}
 				return
 			}
 
 			// Calculate improvement score
 			improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
-			results <- mutatedModel
-			scores <- improvementScore
+
+			// Log the improvement score for debugging
+			fmt.Printf("Try %d: Improvement Score: %.4f\n", try+1, improvementScore)
+
+			results <- modelResult{mutatedModel, improvementScore}
 		}(i)
 	}
 
@@ -733,28 +764,57 @@ func PerformMutationsMultiThreadedWithFallback(generationDir string, tries int, 
 	go func() {
 		wg.Wait()
 		close(results)
-		close(scores)
 	}()
 
-	// Find the best model based on the highest score
-	var bestModel *NetworkConfig
-	bestScore := 0.0
+	// Collect all mutated models and determine the best mutated model
+	var bestMutatedModel *NetworkConfig
+	bestMutatedScore := 0.0
 
 	for result := range results {
-		score := <-scores
-		if score > bestScore && result != nil {
-			bestModel = result
-			bestScore = score
+		if result.score > bestMutatedScore && result.model != nil {
+			bestMutatedModel = result.model
+			bestMutatedScore = result.score
 		}
 	}
 
-	if bestModel != nil {
-		fmt.Printf("Fallback: Found a model with an improvement score of %.2f\n", bestScore)
-		return bestModel
+	// Calculate the main model's improvement score for the shard
+	mainModelFilePath := modelFilePathFolder + ".json"
+	mainModelConfig, err := LoadModel(mainModelFilePath)
+	if err != nil {
+		fmt.Println("Failed to load main model:", err)
+		// Depending on your use case, you might want to return bestMutatedModel here
+		return bestMutatedModel, bestMutatedScore
 	}
 
-	// Return nil if no improvements or matches are found
-	return nil
+	mainModelResult := ContinueFeedforward(mainModelConfig, savedLayerData, layerStateNumber)
+	mainModelScore := CalculateImprovementScore(mainModelResult, outputMap)
+
+	// Log the main model's score
+	fmt.Printf("Main Model Improvement Score: %.4f\n", mainModelScore)
+
+	// If there is a best mutated model, compare its score with the main model's score
+	if bestMutatedModel != nil {
+		mutatedModelResult := ContinueFeedforward(bestMutatedModel, savedLayerData, layerStateNumber)
+		mutatedModelScore := CalculateImprovementScore(mutatedModelResult, outputMap)
+
+		fmt.Printf("Best Mutated Model Improvement Score: %.4f\n", mutatedModelScore)
+
+		// Compare the improvement scores
+		if mutatedModelScore > mainModelScore {
+			fmt.Println("Mutated model has a higher improvement score than the main model.")
+			return bestMutatedModel, mutatedModelScore
+		} else if mutatedModelScore > 0 {
+			fmt.Println("Mutated model has a positive improvement score but does not surpass the main model.")
+			return bestMutatedModel, mutatedModelScore
+		} else {
+			fmt.Println("Mutated model does not provide any improvement.")
+			return nil, 0.0 // Indicate that no improvement was found
+		}
+	}
+
+	// If no mutated model was found, return nil
+	fmt.Println("No mutated model found.")
+	return nil, 0.0
 }
 
 func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neuronRange [2]int, layerRange [2]int) *NetworkConfig {
@@ -866,11 +926,24 @@ func FlexibleCompareOutputs(result map[string]float64, expectedOutput map[string
 // Calculate how much a result improves on the expected output
 func CalculateImprovementScore(result, expectedOutput map[string]float64) float64 {
 	score := 0.0
+	count := 0
 	for key, expectedValue := range expectedOutput {
 		if resultValue, ok := result[key]; ok {
-			diff := math.Abs(expectedValue - resultValue)
-			score += (1.0 - diff) // Higher score for closer results (e.g., diff of 0 gives a score of 1)
+			// Calculate the relative improvement
+			if expectedValue != 0 {
+				relativeImprovement := (resultValue - expectedValue) / math.Abs(expectedValue)
+				score += relativeImprovement
+			} else {
+				// Handle expectedValue == 0 to avoid division by zero
+				if resultValue != 0 {
+					score += 1.0 // Arbitrary positive value for improvement
+				}
+			}
+			count++
 		}
 	}
-	return score / float64(len(expectedOutput)) // Return the average improvement score
+	if count == 0 {
+		return 0.0
+	}
+	return score / float64(count) // Average relative improvement
 }

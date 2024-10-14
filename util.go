@@ -1,30 +1,31 @@
 package dense
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
-	"runtime"
-	"encoding/csv"
 	"path/filepath"
-    "strconv"
-	"strings"
 	"regexp"
+	"runtime"
+	"strconv"
+	"strings"
 	"unicode"
-	"io"
+
+	"github.com/google/uuid"
 	//"sort"
 	//"syscall/js"
 )
-
 
 // EnvType represents the environment type
 type EnvType string
 
 const (
-	WASM   EnvType = "WASM"
-	Linux  EnvType = "Linux"
-	MacOS  EnvType = "MacOS"
+	WASM    EnvType = "WASM"
+	Linux   EnvType = "Linux"
+	MacOS   EnvType = "MacOS"
 	Windows EnvType = "Windows"
 	Unknown EnvType = "Unknown"
 )
@@ -65,7 +66,6 @@ func LoadNetworkConfig(filename string) (*NetworkConfig, error) {
 	return &networkConfig, nil
 }
 
-
 // Load a network configuration from a JSON file
 func LoadNetworkFromFile(filename string) (*NetworkConfig, error) {
 	data, err := readFromFile(filename)
@@ -77,7 +77,6 @@ func LoadNetworkFromFile(filename string) (*NetworkConfig, error) {
 	return &config, err
 }
 
-
 // Helper functions for file IO
 func writeToFile(filename string, data []byte) error {
 	return os.WriteFile(filename, data, 0644)
@@ -86,7 +85,6 @@ func writeToFile(filename string, data []byte) error {
 func readFromFile(filename string) ([]byte, error) {
 	return os.ReadFile(filename)
 }
-
 
 // Save the network configuration as a JSON file
 func SaveNetworkToFile(config *NetworkConfig, filename string) error {
@@ -149,280 +147,267 @@ func CreateDirectory(path string) error {
 }
 
 func saveLayerDataToCSV(data interface{}, modelFilePath string, layerIndex int, inputID string) {
-    // Extract the directory and the model file name without the extension
-    dir, file := filepath.Split(modelFilePath)
-    modelName := strings.TrimSuffix(file, filepath.Ext(file))
-    
-    // Create the folder path where the CSV file will be saved
-    folderPath := filepath.Join(dir, modelName)
-    os.MkdirAll(folderPath, os.ModePerm)
-    
-    // Define the CSV file name using the layer index
-    fileName := filepath.Join(folderPath, "layer_" + strconv.Itoa(layerIndex) + ".csv")
+	// Extract the directory and the model file name without the extension
+	dir, file := filepath.Split(modelFilePath)
+	modelName := strings.TrimSuffix(file, filepath.Ext(file))
 
-    // Open the CSV file in append mode. If the file does not exist, it will be created.
-    fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        panic(err)
-    }
-    defer fileHandle.Close()
+	// Create the folder path where the CSV file will be saved
+	folderPath := filepath.Join(dir, modelName)
+	os.MkdirAll(folderPath, os.ModePerm)
 
-    writer := csv.NewWriter(fileHandle)
-    defer writer.Flush()
+	// Define the CSV file name using the layer index
+	fileName := filepath.Join(folderPath, "layer_"+strconv.Itoa(layerIndex)+".csv")
 
-    // Write the data to the CSV file depending on its type
-    switch v := data.(type) {
-    case map[string]float64:
-        for key, value := range v {
-            record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
-            writer.Write(record)
-        }
+	// Open the CSV file in append mode. If the file does not exist, it will be created.
+	fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fileHandle.Close()
 
-    case [][]float64:
-        for _, row := range v {
-            var record []string
-            record = append(record, inputID) // Include inputID at the beginning
-            for _, value := range row {
-                record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
-            }
-            writer.Write(record)
-        }
+	writer := csv.NewWriter(fileHandle)
+	defer writer.Flush()
 
-    case [][][]float64:
-        for _, image := range v {
-            for _, row := range image {
-                var record []string
-                record = append(record, inputID) // Include inputID at the beginning
-                for _, value := range row {
-                    record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
-                }
-                writer.Write(record)
-            }
-        }
-    }
+	// Write the data to the CSV file depending on its type
+	switch v := data.(type) {
+	case map[string]float64:
+		for key, value := range v {
+			record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
+			writer.Write(record)
+		}
+
+	case [][]float64:
+		for _, row := range v {
+			var record []string
+			record = append(record, inputID) // Include inputID at the beginning
+			for _, value := range row {
+				record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+			}
+			writer.Write(record)
+		}
+
+	case [][][]float64:
+		for _, image := range v {
+			for _, row := range image {
+				var record []string
+				record = append(record, inputID) // Include inputID at the beginning
+				for _, value := range row {
+					record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+				}
+				writer.Write(record)
+			}
+		}
+	}
 }
-
-
-
-
-
 
 // LoadCSVLayerState loads the saved layer state for a specific inputID from a CSV file and returns it as a suitable data structure.
 func LoadCSVLayerState(filePath string, inputID string) interface{} {
-    // Open the CSV file
-    file, err := os.Open(filePath)
-    if err != nil {
-        panic(err)
-    }
-    defer file.Close()
+	// Open the CSV file
+	file, err := os.Open(filePath)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
 
-    // Create a new CSV reader
-    reader := csv.NewReader(file)
+	// Create a new CSV reader
+	reader := csv.NewReader(file)
 
-    // Read all the data from the CSV file
-    records, err := reader.ReadAll()
-    if err != nil {
-        panic(err)
-    }
+	// Read all the data from the CSV file
+	records, err := reader.ReadAll()
+	if err != nil {
+		panic(err)
+	}
 
-    // Assuming the saved layer state is a map[string]float64, adapt as needed based on your data structure
-    savedLayerState := make(map[string]float64)
+	// Assuming the saved layer state is a map[string]float64, adapt as needed based on your data structure
+	savedLayerState := make(map[string]float64)
 
-    // Populate the map with the data from the CSV file corresponding to the inputID
-    for _, record := range records {
-        if len(record) >= 3 { // Assuming each record has inputID, key, and value
-            recordInputID := record[0]
-            if recordInputID != inputID {
-                continue // Skip records not matching the inputID
-            }
-            key := record[1]
-            value, err := strconv.ParseFloat(record[2], 64)
-            if err != nil {
-                panic(err)
-            }
-            savedLayerState[key] = value
-        }
-    }
+	// Populate the map with the data from the CSV file corresponding to the inputID
+	for _, record := range records {
+		if len(record) >= 3 { // Assuming each record has inputID, key, and value
+			recordInputID := record[0]
+			if recordInputID != inputID {
+				continue // Skip records not matching the inputID
+			}
+			key := record[1]
+			value, err := strconv.ParseFloat(record[2], 64)
+			if err != nil {
+				panic(err)
+			}
+			savedLayerState[key] = value
+		}
+	}
 
-    return savedLayerState
+	return savedLayerState
 }
-
-
 
 // SaveShardedLayerState saves the layer state for each input as a separate file (shard) in a dedicated folder.
 func SaveShardedLayerState(data interface{}, modelFilePath string, layerIndex int, inputID string) {
-    // Create a folder for storing shards for the given layer
-    dir, file := filepath.Split(modelFilePath)
-    modelName := strings.TrimSuffix(file, filepath.Ext(file))
-    layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
-    
-    // Create the directory if it doesn't exist
-    os.MkdirAll(layerShardFolder, os.ModePerm)
+	// Create a folder for storing shards for the given layer
+	dir, file := filepath.Split(modelFilePath)
+	modelName := strings.TrimSuffix(file, filepath.Ext(file))
+	layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
 
-    // Define the CSV file name for the specific input ID shard
-    fileName := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
+	// Create the directory if it doesn't exist
+	os.MkdirAll(layerShardFolder, os.ModePerm)
 
-    // Save the state for this input to a CSV file
-    fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        panic(err)
-    }
-    defer fileHandle.Close()
+	// Define the CSV file name for the specific input ID shard
+	fileName := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
 
-    writer := csv.NewWriter(fileHandle)
+	// Save the state for this input to a CSV file
+	fileHandle, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fileHandle.Close()
 
-    // Write data to the CSV file based on the type of `data`
-    switch v := data.(type) {
-    case map[string]float64:
-        for key, value := range v {
-            record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
-            writer.Write(record)
-        }
+	writer := csv.NewWriter(fileHandle)
 
-    case [][]float64:
-        for _, row := range v {
-            var record []string
-            record = append(record, inputID)
-            for _, value := range row {
-                record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
-            }
-            writer.Write(record)
-        }
+	// Write data to the CSV file based on the type of `data`
+	switch v := data.(type) {
+	case map[string]float64:
+		for key, value := range v {
+			record := []string{inputID, key, strconv.FormatFloat(value, 'g', -1, 64)}
+			writer.Write(record)
+		}
 
-    case [][][]float64:
-        for _, image := range v {
-            for _, row := range image {
-                var record []string
-                record = append(record, inputID)
-                for _, value := range row {
-                    record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
-                }
-                writer.Write(record)
-            }
-        }
-    }
+	case [][]float64:
+		for _, row := range v {
+			var record []string
+			record = append(record, inputID)
+			for _, value := range row {
+				record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+			}
+			writer.Write(record)
+		}
 
-    // Flush the writer to ensure everything is written properly, including newlines.
-    writer.Flush()
+	case [][][]float64:
+		for _, image := range v {
+			for _, row := range image {
+				var record []string
+				record = append(record, inputID)
+				for _, value := range row {
+					record = append(record, strconv.FormatFloat(value, 'g', -1, 64))
+				}
+				writer.Write(record)
+			}
+		}
+	}
 
-    // Check for any error that occurred during writing or flushing
-    if err := writer.Error(); err != nil {
-        panic(err)
-    }
+	// Flush the writer to ensure everything is written properly, including newlines.
+	writer.Flush()
+
+	// Check for any error that occurred during writing or flushing
+	if err := writer.Error(); err != nil {
+		panic(err)
+	}
 }
-
-
 
 // LoadShardedLayerState loads the saved layer state for a specific inputID shard from a CSV file.
 func LoadShardedLayerState(modelFilePath string, layerIndex int, inputID string) interface{} {
-    // Define the path to the shard for this input
-    dir, fileName := filepath.Split(modelFilePath)
-    modelName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-    layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
-    shardFilePath := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
-    //fmt.Println("shard",shardFilePath)
-    // Open the shard file
-    fileHandle, err := os.Open(shardFilePath)
-    if err != nil {
-        panic(err)
-    }
-    defer fileHandle.Close()
+	// Define the path to the shard for this input
+	dir, fileName := filepath.Split(modelFilePath)
+	modelName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	layerShardFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_shards", layerIndex))
+	shardFilePath := filepath.Join(layerShardFolder, fmt.Sprintf("input_%s.csv", inputID))
+	//fmt.Println("shard",shardFilePath)
+	// Open the shard file
+	fileHandle, err := os.Open(shardFilePath)
+	if err != nil {
+		panic(err)
+	}
+	defer fileHandle.Close()
 
-    reader := csv.NewReader(fileHandle)
-    records, err := reader.ReadAll()
-    if err != nil {
-        panic(err)
-    }
+	reader := csv.NewReader(fileHandle)
+	records, err := reader.ReadAll()
+	if err != nil {
+		panic(err)
+	}
 
-    // Assuming the saved layer state is a map[string]float64
-    savedLayerState := make(map[string]float64)
-    for _, record := range records {
-        if len(record) >= 3 && record[0] == inputID {
-            key := record[1]
-            value, err := strconv.ParseFloat(record[2], 64)
-            if err != nil {
-                panic(err)
-            }
-            savedLayerState[key] = value
-        }
-    }
+	// Assuming the saved layer state is a map[string]float64
+	savedLayerState := make(map[string]float64)
+	for _, record := range records {
+		if len(record) >= 3 && record[0] == inputID {
+			key := record[1]
+			value, err := strconv.ParseFloat(record[2], 64)
+			if err != nil {
+				panic(err)
+			}
+			savedLayerState[key] = value
+		}
+	}
 
-    return savedLayerState
+	return savedLayerState
 }
-
-
 
 // CreateLearnedOrNotFolder creates the folder for learned or not tracking inside the model folder
 func CreateLearnedOrNotFolder(modelFilePath string, layerIndex int) string {
-    // Extract the directory and the model name without the extension
-    dir, file := filepath.Split(modelFilePath)
-    modelName := strings.TrimSuffix(file, filepath.Ext(file))
+	// Extract the directory and the model name without the extension
+	dir, file := filepath.Split(modelFilePath)
+	modelName := strings.TrimSuffix(file, filepath.Ext(file))
 
-    // Create the folder path where the `learnedOrNot` files will be saved
-    learnedOrNotFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_learnedornot", layerIndex))
+	// Create the folder path where the `learnedOrNot` files will be saved
+	learnedOrNotFolder := filepath.Join(dir, modelName, fmt.Sprintf("layer_%d_learnedornot", layerIndex))
 
-    // Create the directory if it doesn't exist
-    err := os.MkdirAll(learnedOrNotFolder, os.ModePerm)
-    if err != nil {
-        panic(fmt.Sprintf("Failed to create learnedOrNot folder: %v", err))
-    }
+	// Create the directory if it doesn't exist
+	err := os.MkdirAll(learnedOrNotFolder, os.ModePerm)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create learnedOrNot folder: %v", err))
+	}
 
-    return learnedOrNotFolder
+	return learnedOrNotFolder
 }
 
 // SaveLearnedOrNot saves whether the input was correctly predicted (true/false) in the `learnedOrNot` folder
 func SaveLearnedOrNot(learnedOrNotFolder string, inputID string, isCorrect bool) {
-    var learnedFileName string
+	var learnedFileName string
 
-    if isCorrect {
-        learnedFileName = fmt.Sprintf("input_%s.true", inputID)
-    } else {
-        learnedFileName = fmt.Sprintf("input_%s.false", inputID)
-    }
+	if isCorrect {
+		learnedFileName = fmt.Sprintf("input_%s.true", inputID)
+	} else {
+		learnedFileName = fmt.Sprintf("input_%s.false", inputID)
+	}
 
-    // Path for the learned or not file
-    filePath := filepath.Join(learnedOrNotFolder, learnedFileName)
+	// Path for the learned or not file
+	filePath := filepath.Join(learnedOrNotFolder, learnedFileName)
 
-    // Write the result (true/false) to the file
-    content := strconv.FormatBool(isCorrect)
-    err := os.WriteFile(filePath, []byte(content), 0644)
-    if err != nil {
-        panic(fmt.Sprintf("Failed to write file %s: %v", filePath, err))
-    }
+	// Write the result (true/false) to the file
+	content := strconv.FormatBool(isCorrect)
+	err := os.WriteFile(filePath, []byte(content), 0644)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to write file %s: %v", filePath, err))
+	}
 }
 
-
-
 func FindHighestNumberedFolder(dirPath, prefix, suffix string) (string, error) {
-    files, err := ioutil.ReadDir(dirPath)
-    if err != nil {
-        return "", err
-    }
+	files, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		return "", err
+	}
 
-    highestNumber := -1
-    var highestFolder string
+	highestNumber := -1
+	var highestFolder string
 
-    // Regular expression to match the folder names with the prefix, number, and suffix
-    re := regexp.MustCompile(fmt.Sprintf(`^%s_(\d+)_%s$`, prefix, suffix))
+	// Regular expression to match the folder names with the prefix, number, and suffix
+	re := regexp.MustCompile(fmt.Sprintf(`^%s_(\d+)_%s$`, prefix, suffix))
 
-    for _, file := range files {
-        if file.IsDir() {
-            matches := re.FindStringSubmatch(file.Name())
-            if len(matches) == 2 {
-                number, err := strconv.Atoi(matches[1])
-                if err == nil && number > highestNumber {
-                    highestNumber = number
-                    highestFolder = file.Name()
-                }
-            }
-        }
-    }
+	for _, file := range files {
+		if file.IsDir() {
+			matches := re.FindStringSubmatch(file.Name())
+			if len(matches) == 2 {
+				number, err := strconv.Atoi(matches[1])
+				if err == nil && number > highestNumber {
+					highestNumber = number
+					highestFolder = file.Name()
+				}
+			}
+		}
+	}
 
-    if highestNumber == -1 {
-        return "", fmt.Errorf("no folders found with prefix %s and suffix %s", prefix, suffix)
-    }
+	if highestNumber == -1 {
+		return "", fmt.Errorf("no folders found with prefix %s and suffix %s", prefix, suffix)
+	}
 
-    return highestFolder, nil
+	return highestFolder, nil
 }
 
 func ExtractDigitsToInt(s string) (int, error) {
@@ -438,7 +423,6 @@ func ExtractDigitsToInt(s string) (int, error) {
 	numberStr := string(digits)
 	return strconv.Atoi(numberStr)
 }
-
 
 // GetFilesWithExtension returns the first x files with the given extension from the specified path.
 // If fullPath is true, it returns the full path, otherwise just the file name without the extension.
@@ -486,8 +470,6 @@ func GetFilesWithExtension(path string, extension string, x int, fullPath bool) 
 	return filesWithExtension, nil
 }
 
-
-
 func DeleteAllFolders(dirPath string) error {
 	// Read the contents of the directory
 	items, err := ioutil.ReadDir(dirPath)
@@ -515,35 +497,40 @@ func DeleteAllFolders(dirPath string) error {
 
 // Check if any files with the specified extension exist in the directory
 func FilesWithExtensionExist(directory, fileExtension string) (bool, error) {
-    var matchingFiles []string
-    err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
-        if err != nil {
-            return err
-        }
-        if filepath.Ext(info.Name()) == fileExtension {
-            matchingFiles = append(matchingFiles, path)
-        }
-        return nil
-    })
-    if err != nil {
-        return false, err
-    }
-    return len(matchingFiles) > 0, nil
+	var matchingFiles []string
+	err := filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if filepath.Ext(info.Name()) == fileExtension {
+			matchingFiles = append(matchingFiles, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return len(matchingFiles) > 0, nil
 }
 
 // FilesWithExtensionExistInCurrentFolder checks if any files with the specified extension exist in the given directory.
 // It only checks the current directory and does not walk through subdirectories.
 func FilesWithExtensionExistInCurrentFolder(directory, fileExtension string) (bool, error) {
-    files, err := ioutil.ReadDir(directory)
-    if err != nil {
-        return false, err
-    }
+	files, err := ioutil.ReadDir(directory)
+	if err != nil {
+		return false, err
+	}
 
-    for _, file := range files {
-        if !file.IsDir() && filepath.Ext(file.Name()) == fileExtension {
-            return true, nil
-        }
-    }
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == fileExtension {
+			return true, nil
+		}
+	}
 
-    return false, nil
+	return false, nil
+}
+
+// GenerateUniqueModelID generates a unique ModelID using UUID.
+func GenerateUniqueModelID(parentID string) string {
+	return fmt.Sprintf("%s_child_%s", parentID, uuid.New().String())
 }
