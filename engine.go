@@ -904,26 +904,26 @@ func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neu
 	case "AppendCNNAndDenseLayer":
 		// New mutation logic
 		// Define suitable parameters for CNN and Dense layers, possibly within neuronRange and layerRange
-		filterSize := rand.Intn(3) + 3                                              // Random filter size between 3 and 5
-		numFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]   // Number of filters between neuronRange[0] and neuronRange[1]
-		stride := 1                                                                 // Fixed stride for simplicity; can be randomized if needed
-		padding := (filterSize - 1) / 2                                             // To maintain spatial dimensions
-		denseNeurons := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0] // Number of neurons in Dense layer
+		filterSize := rand.Intn(3) + 3                                            // Random filter size between 3 and 5
+		numFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0] // Number of filters between neuronRange[0] and neuronRange[1]
+		stride := 1                                                               // Fixed stride for simplicity; can be randomized if needed
+		padding := (filterSize - 1) / 2                                           // To maintain spatial dimensions
 
-		err := AppendCNNAndDenseLayer(modelConfig, filterSize, numFilters, stride, padding, denseNeurons)
+		err := AppendCNNLayer(modelConfig, filterSize, numFilters, stride, padding)
 		if err != nil {
 			fmt.Printf("Failed to append CNN and Dense layers: %v\n", err)
 		}
 
-	case "AppendLSTMLayer":
-		// New mutation logic
-		// Define suitable parameters for CNN and Dense layers, possibly within neuronRange and layerRange
-		
-		AppendLSTMLayer(modelConfig)
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
 		AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
 
-		
+	case "AppendLSTMLayer":
+		// New mutation logic
+		// Define suitable parameters for CNN and Dense layers, possibly within neuronRange and layerRange
+
+		AppendLSTMLayer(modelConfig)
+		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
+		AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
 
 	case "AddCNNLayer":
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
