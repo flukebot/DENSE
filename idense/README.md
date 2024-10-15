@@ -113,4 +113,4 @@ This helps the model grow dynamically and search for a better configuration.
 
 For a detailed visual representation of the workflow, mutations, and file handling, please refer to the following diagram:
 
-![GRAPH](./diagram.jpg)
+![GRAPH](./diagram.png)
