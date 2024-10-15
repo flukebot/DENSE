@@ -881,6 +881,15 @@ func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neu
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
 		AppendMultipleLayers(modelConfig, numNewLayers, numNewNeuronsOrFilters)
 
+	case "AddDenseLSTMLayer":
+
+		//numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
+		//AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+	case "AddDenseCNNLayer":
+
+		//numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
+		//AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+
 	case "AddCNNLayer":
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
 		AddCNNLayerAtRandomPosition(modelConfig, numNewNeuronsOrFilters)

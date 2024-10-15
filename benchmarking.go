@@ -120,13 +120,13 @@ func benchmarkFloat64MultiThreaded(duration time.Duration) int {
 // FormatNumber formats large numbers into a more readable string with suffixes like Thousand, Million, Billion, etc.
 func FormatNumber(num int) string {
 	switch {
-	case num >= 1e12:
+	case float64(num) >= 1e12:
 		return fmt.Sprintf("%.2f Trillion", float64(num)/1e12)
-	case num >= 1e9:
+	case float64(num) >= 1e9:
 		return fmt.Sprintf("%.2f Billion", float64(num)/1e9)
-	case num >= 1e6:
+	case float64(num) >= 1e6:
 		return fmt.Sprintf("%.2f Million", float64(num)/1e6)
-	case num >= 1e3:
+	case float64(num) >= 1e3:
 		return fmt.Sprintf("%.2f Thousand", float64(num)/1e3)
 	default:
 		return fmt.Sprintf("%d", num)
