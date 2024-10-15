@@ -105,7 +105,8 @@ This helps the model grow dynamically and search for a better configuration.
 
 1. Clone the repository.
 2. Run the following command to start the training process:
-   ```bash
+   
+```bash
    go run main.go
 ```
 
