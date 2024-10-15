@@ -198,7 +198,7 @@ func main() {
 	}
 
 	// Mutation types
-	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers"}
+	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
 
 	// Define ranges for neurons/filters and layers dynamically
 	neuronRange := [2]int{10, 128} // Min and max neurons or filters

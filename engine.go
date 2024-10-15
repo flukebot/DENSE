@@ -771,30 +771,37 @@ func PerformMutationsMultiThreadedWithFallback(
 	allowForTolerance bool,
 	tolerancePercentage float64,
 ) (*NetworkConfig, float64) { // Return score as well
+
 	if tries <= 0 {
 		tries = 100 // Default value for tries if not provided
 	}
 
-	// Channel to collect results: model and its score
-	type modelResult struct {
+	// Determine the number of CPU cores
+	numCPU := runtime.NumCPU()
+	fmt.Printf("Number of CPU cores: %d\n", numCPU)
+
+	// Channels for jobs and results
+	jobs := make(chan int, tries)
+	results := make(chan struct {
 		model *NetworkConfig
 		score float64
-	}
-	results := make(chan modelResult, tries)
+	}, tries)
+
 	var wg sync.WaitGroup
 
-	// Launch goroutines for each try
-	for i := 0; i < tries; i++ {
-		wg.Add(1)
-		go func(try int) {
-			defer wg.Done()
-
+	// Worker function
+	worker := func() {
+		defer wg.Done()
+		for try := range jobs {
 			// Load model
 			modelConfig, err := LoadModel(modelFilePathFolder + ".json")
 			if err != nil {
-				fmt.Println("Failed to load model:", err)
-				results <- modelResult{nil, 0.0}
-				return
+				fmt.Printf("Try %d: Failed to load model: %v\n", try+1, err)
+				results <- struct {
+					model *NetworkConfig
+					score float64
+				}{nil, 0.0}
+				continue
 			}
 
 			// Apply mutation
@@ -807,17 +814,30 @@ func PerformMutationsMultiThreadedWithFallback(
 			improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
 
 			// Log the improvement score for debugging
-			fmt.Printf("Try %d: Improvement Score: %.4f\n", try+1, improvementScore)
+			//fmt.Printf("Try %d: Improvement Score: %.4f\n", try+1, improvementScore)
 
-			results <- modelResult{mutatedModel, improvementScore}
-		}(i)
+			results <- struct {
+				model *NetworkConfig
+				score float64
+			}{mutatedModel, improvementScore}
+		}
 	}
 
-	// Wait for all goroutines to finish
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	// Start worker pool
+	wg.Add(numCPU)
+	for i := 0; i < numCPU; i++ {
+		go worker()
+	}
+
+	// Send jobs
+	for i := 0; i < tries; i++ {
+		jobs <- i
+	}
+	close(jobs) // Close the jobs channel since no more jobs will be sent
+
+	// Wait for all workers to finish
+	wg.Wait()
+	close(results) // Close results channel after all workers are done
 
 	// Collect all mutated models and determine the best mutated model
 	var bestMutatedModel *NetworkConfig
@@ -881,14 +901,29 @@ func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neu
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
 		AppendMultipleLayers(modelConfig, numNewLayers, numNewNeuronsOrFilters)
 
-	case "AddDenseLSTMLayer":
+	case "AppendCNNAndDenseLayer":
+		// New mutation logic
+		// Define suitable parameters for CNN and Dense layers, possibly within neuronRange and layerRange
+		filterSize := rand.Intn(3) + 3                                              // Random filter size between 3 and 5
+		numFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]   // Number of filters between neuronRange[0] and neuronRange[1]
+		stride := 1                                                                 // Fixed stride for simplicity; can be randomized if needed
+		padding := (filterSize - 1) / 2                                             // To maintain spatial dimensions
+		denseNeurons := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0] // Number of neurons in Dense layer
 
-		//numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
-		//AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
-	case "AddDenseCNNLayer":
+		err := AppendCNNAndDenseLayer(modelConfig, filterSize, numFilters, stride, padding, denseNeurons)
+		if err != nil {
+			fmt.Printf("Failed to append CNN and Dense layers: %v\n", err)
+		}
 
-		//numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
-		//AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+	case "AppendLSTMLayer":
+		// New mutation logic
+		// Define suitable parameters for CNN and Dense layers, possibly within neuronRange and layerRange
+		
+		AppendLSTMLayer(modelConfig)
+		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
+		AppendNewLayerFullConnections(modelConfig, numNewNeuronsOrFilters)
+
+		
 
 	case "AddCNNLayer":
 		numNewNeuronsOrFilters := rand.Intn(neuronRange[1]-neuronRange[0]+1) + neuronRange[0]
