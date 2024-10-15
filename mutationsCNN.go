@@ -221,8 +221,8 @@ func AppendCNNLayer(config *NetworkConfig, filterSize int, numFilters int, strid
 	config.Layers.Hidden = append(config.Layers.Hidden, newLayer)
 
 	// Log the addition
-	fmt.Printf("Appended CNN layer with %dx%d filters, %d filters, stride %d, padding %d.\n",
-		filterSize, filterSize, numFilters, stride, padding)
+	/*fmt.Printf("Appended CNN layer with %dx%d filters, %d filters, stride %d, padding %d.\n",
+	filterSize, filterSize, numFilters, stride, padding)*/
 
 	return nil
 }
