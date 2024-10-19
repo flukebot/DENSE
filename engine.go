@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -166,6 +167,94 @@ func SaveLayerStates(generationDir string, data *[]interface{}, imgDir string) {
 	}
 
 	fmt.Println("All models processed.")
+}
+
+func CreateModelShards(modelLocation string, data *[]interface{}, imgDir string, currentGeneration int) {
+
+	// Read all files in the modelLocation directory
+	files, err := ioutil.ReadDir(modelLocation)
+	if err != nil {
+		fmt.Printf("Failed to read models directory: %v\n", err)
+		return
+	}
+
+	// Determine the number of available CPU cores for concurrency
+	numCores := runtime.NumCPU()
+	semaphore := make(chan struct{}, numCores)
+
+	var wg sync.WaitGroup
+
+	// Iterate over each file in the models directory
+	for _, file := range files {
+
+		// Process only JSON files (assuming models are saved as JSON)
+		if filepath.Ext(file.Name()) != ".json" {
+			continue // Skip non-JSON files
+		}
+
+		// Extract the model name by removing the file extension
+		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+
+		// Full path to the model file
+		modelFilePath := filepath.Join(modelLocation, file.Name())
+		fmt.Println("Processing Model:", modelName)
+
+		// Define the generation directory path for the current model and generation
+		generationDir := filepath.Join(modelLocation, modelName, "generations", strconv.Itoa(currentGeneration))
+
+		// Check if the generation directory already exists
+		if _, err := os.Stat(generationDir); !os.IsNotExist(err) {
+			fmt.Printf("Generation directory %s already exists. Skipping shard creation.\n", generationDir)
+			continue // Skip to the next model
+		}
+
+		// Load the model configuration
+		modelConfig, err := LoadModel(modelFilePath)
+		if err != nil {
+			fmt.Printf("Failed to load model %s: %v\n", modelName, err)
+			continue // Skip to the next model
+		}
+
+		// Determine the layer state number (assuming the last hidden layer)
+		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+
+		// Iterate over each data item to create shards
+		for _, v := range *data {
+			semaphore <- struct{}{} // Acquire a semaphore slot
+			wg.Add(1)
+
+			// Launch a goroutine for each data item
+			go func(d interface{}) {
+				defer wg.Done()
+				defer func() { <-semaphore }() // Release the semaphore slot when done
+
+				var inputs map[string]interface{}
+				var inputID string
+
+				// Type assertion to handle ImageData
+				switch d := d.(type) {
+				case ImageData:
+					inputs = ConvertImageToInputs(filepath.Join(imgDir, d.FileName)) // Convert image to input values
+					inputID = filepath.Base(d.FileName)                              // Use only the base name to avoid nested directories
+				default:
+					fmt.Printf("Unknown data type: %T\n", d)
+					return // Skip if data type is unknown
+				}
+
+				// Perform feedforward and obtain the layer state
+				outputPredicted, layerState := FeedforwardLayerStateSavingShard(modelConfig, inputs, layerStateNumber, modelFilePath)
+				_ = outputPredicted // Ignoring outputPredicted as it's not used here
+
+				// Save the shard state directly into the correct generation directory
+				SaveShardedLayerStateExact(layerState, modelFilePath, layerStateNumber, inputID, strconv.Itoa(currentGeneration))
+			}(v)
+		}
+	}
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	fmt.Println("Created shards for generation")
 }
 
 func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string, allowIncremental bool) {

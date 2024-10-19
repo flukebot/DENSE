@@ -22,7 +22,7 @@ var mnistData []dense.ImageData
 var testDataChunk []dense.ImageData
 
 func main() {
-	/*fmt.Println("Starting CNN train and host")
+	fmt.Println("Starting CNN train and host")
 	jsonFilePath = "./host/mnistData.json"
 	// Check if the MNIST directory exists, and run setup if it doesn't
 	mnistDir := "./host/MNIST"
@@ -48,15 +48,16 @@ func main() {
 	//percentageTrain := 0.8
 	numModels := 2
 	generationNum := 500
-	projectPath := "./host/generations/"
+	//projectPath := "./host/generations/"
+	projectModels := "./host/models/"
 
-	filesExist, _ := dense.FilesWithExtensionExistInCurrentFolder(projectPath+"0", ".json")
+	filesExist, _ := dense.FilesWithExtensionExistInCurrentFolder(projectModels, ".json")
 
 	if filesExist {
 		fmt.Println("Files with the specified extension already exist. Skipping model generation.")
 	} else {
 		fmt.Println("No files found with the specified extension. Generating models.")
-		dense.GenerateModelsIfNotExist(projectPath+"0", numModels, inputSize, outputSize, outputTypes, projectName)
+		dense.GenerateModelsIfNotExist(projectModels, numModels, inputSize, outputSize, outputTypes, projectName)
 	}
 
 	testDataChunk = mnistData[:40000]
@@ -81,20 +82,18 @@ func main() {
 	}
 
 	// Mutation types
-	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
+	/*mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
 
 	// Define ranges for neurons/filters and layers dynamically
 	neuronRange := [2]int{10, 128} // Min and max neurons or filters
 	layerRange := [2]int{1, 5}     // Min and max layers
 
-	noImprovementCounter := 0
+	noImprovementCounter := 0*/
 
 	for i := 0; i <= generationNum; i++ {
-		generationDir := "./host/generations/" + strconv.Itoa(i)
-		fmt.Println("----CURENT GEN---", generationDir)
 
-		dense.SaveLayerStates(generationDir, &testDataInterface, mnistDir)
-		dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
+		dense.CreateModelShards(projectModels, &testDataInterface, mnistDir, i)
+		/*dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
 		// **Capture the return value of GenerateChildren**
 		improvementsFound := dense.GenerateChildren(generationDir, &testDataInterface, mutationTypes, neuronRange, layerRange, 1000, true, 40)
@@ -115,13 +114,13 @@ func main() {
 			noImprovementCounter = 0 // Reset the counter after adjustment
 		}
 
-		dense.MoveChildrenToNextGeneration(generationDir, i, 100)
+		dense.MoveChildrenToNextGeneration(generationDir, i, 100)*/
 		//dense.DeleteAllFolders(generationDir)
 		//CreateNextGeneration(generationDir, numModels, i)
-		//break
+		break
 	}
 
-	return*/
+	return
 
 }
 
