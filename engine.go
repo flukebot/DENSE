@@ -257,6 +257,41 @@ func CreateModelShards(modelLocation string, data *[]interface{}, imgDir string,
 	fmt.Println("Created shards for generation")
 }
 
+func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string, currentGeneration int) int {
+
+	// Read all files in the modelLocation directory
+	files, err := ioutil.ReadDir(modelLocation)
+	if err != nil {
+		fmt.Printf("Failed to read models directory: %v\n", err)
+		return 0
+	}
+
+	for _, file := range files {
+		// Process only JSON files (assuming models are saved as JSON)
+		if filepath.Ext(file.Name()) != ".json" {
+			continue // Skip non-JSON files
+		}
+
+		// Extract the model name by removing the file extension
+		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+
+		// Full path to the model file
+		modelFilePath := filepath.Join(modelLocation, file.Name())
+		fmt.Println("Processing Model:", modelName)
+
+		// Define the generation directory path for the current model and generation
+		generationDir := filepath.Join(modelLocation, modelName, "generations", strconv.Itoa(currentGeneration))
+
+		fmt.Println(modelFilePath, generationDir)
+	}
+
+	// Collect and sum up the total number of `.false` files created
+	totalNotLearned := 0
+
+	// Return the total number of `.false` files created
+	return totalNotLearned
+}
+
 func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string, allowIncremental bool) {
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {

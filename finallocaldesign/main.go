@@ -93,6 +93,10 @@ func main() {
 	for i := 0; i <= generationNum; i++ {
 
 		dense.CreateModelShards(projectModels, &testDataInterface, mnistDir, i)
+
+		dense.CreateLearnedOrNot(projectModels, &testDataInterface, mnistDir, i)
+
+		//IncrementalLayerMutationSearch
 		/*dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
 		// **Capture the return value of GenerateChildren**
