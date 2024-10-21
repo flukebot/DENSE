@@ -376,7 +376,11 @@ func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string
 						// Optionally, determine if the model "learned" based on a threshold
 						// For example, consider it learned if similarity is above 90%
 						isCorrect := similarityScore >= 90.0 // Example threshold
-						SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+
+						// Only save the result if it is incorrect (i.e., model has not learned)
+						if !isCorrect {
+							SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+						}
 
 						//fmt.Println(result)
 						//fmt.Println(actualOutput)
@@ -390,8 +394,10 @@ func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string
 							results <- 0.0
 						}
 
-						// Save the learned status (true if correct, false if incorrect)
-						SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+						if !isCorrect {
+							// Save the learned status (true if correct, false if incorrect)
+							SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+						}
 					}
 				}
 
