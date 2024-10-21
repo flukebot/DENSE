@@ -541,7 +541,11 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 						// Optionally, determine if the model "learned" based on a threshold
 						// For example, consider it learned if similarity is above 90%
 						isCorrect := similarityScore >= 90.0 // Example threshold
-						SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+
+						// Only save the result if it is incorrect (i.e., model has not learned)
+						if !isCorrect {
+							SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+						}
 					} else {
 						// Compare the results and store the prediction status
 						isCorrect := CompareOutputs(result, actualOutput)
@@ -551,8 +555,10 @@ func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface
 							results <- 0.0
 						}
 
-						// Save the learned status (true if correct, false if incorrect)
-						SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+						// Only save the result if it is incorrect (i.e., model has not learned)
+						if !isCorrect {
+							SaveLearnedOrNot(learnedOrNotFolder, inputID, isCorrect)
+						}
 					}
 				}
 			}(v)
