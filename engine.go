@@ -257,7 +257,7 @@ func CreateModelShards(modelLocation string, data *[]interface{}, imgDir string,
 	fmt.Println("Created shards for generation")
 }
 
-func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string, currentGeneration int) int {
+func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string, currentGeneration int, allowIncremental bool) int {
 
 	// Read all files in the modelLocation directory
 	files, err := ioutil.ReadDir(modelLocation)
@@ -265,6 +265,10 @@ func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string
 		fmt.Printf("Failed to read models directory: %v\n", err)
 		return 0
 	}
+
+	// Get the number of available CPU cores and create a semaphore based on this number
+	numCores := runtime.NumCPU()
+	semaphore := make(chan struct{}, numCores)
 
 	for _, file := range files {
 		// Process only JSON files (assuming models are saved as JSON)
@@ -277,12 +281,146 @@ func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string
 
 		// Full path to the model file
 		modelFilePath := filepath.Join(modelLocation, file.Name())
-		fmt.Println("Processing Model:", modelName)
+		fmt.Println("CreateLearnedOrNot Processing Model:", modelName)
 
 		// Define the generation directory path for the current model and generation
 		generationDir := filepath.Join(modelLocation, modelName, "generations", strconv.Itoa(currentGeneration))
 
-		fmt.Println(modelFilePath, generationDir)
+		// Load the model configuration
+		modelConfig, err := LoadModel(modelFilePath)
+		if err != nil {
+			fmt.Println("Failed to load model:", err)
+			continue
+		}
+
+		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+
+		learnedOrNotFolder := filepath.Join(generationDir, fmt.Sprintf("layer_%d_learnedornot", layerStateNumber))
+		shardFolderPath := filepath.Join(generationDir, fmt.Sprintf("layer_%d_shards", layerStateNumber))
+		//fmt.Println(learnedOrNotFolder)
+
+		// Check if the learnedOrNotFolder exists
+		if _, err := os.Stat(learnedOrNotFolder); err == nil {
+			// Folder exists, so skip this iteration
+			fmt.Printf("Folder %s already exists, skipping...\n", learnedOrNotFolder)
+			continue
+		} else if os.IsNotExist(err) {
+			// Folder does not exist, so create it
+			err := os.MkdirAll(learnedOrNotFolder, os.ModePerm)
+			if err != nil {
+				fmt.Printf("Failed to create learnedOrNot folder: %v\n", err)
+				continue
+			}
+		} else {
+			// Some other error occurred
+			fmt.Printf("Error checking learnedOrNot folder: %v\n", err)
+			continue
+		}
+
+		// WaitGroup to wait for all goroutines to finish
+		var wg sync.WaitGroup
+
+		// Channel to store the evaluation results
+		results := make(chan float64, len(*data))
+
+		for _, v := range *data {
+
+			semaphore <- struct{}{} // Acquire a semaphore slot
+			wg.Add(1)
+
+			go func(d interface{}, sFolderPath string, LoRNotFolder string, genDir string) {
+				defer wg.Done()
+				defer func() { <-semaphore }() // Release semaphore slot when done
+
+				//fmt.Println(v)
+
+				var inputID string
+				var actualOutput map[string]float64
+
+				// Handle the type of data with type assertion
+				switch d := d.(type) {
+				case ImageData:
+					inputID = d.FileName
+					actualOutput = d.OutputMap
+				default:
+					fmt.Printf("Unknown data type: %T\n", d)
+					return
+				}
+
+				shardFilePath := filepath.Join(sFolderPath, fmt.Sprintf("input_%s.csv", inputID))
+
+				//_ = actualOutput
+
+				//fmt.Println(shardFilePath)
+
+				if _, err := os.Stat(shardFilePath); err == nil {
+					savedLayerData := LoadShardedLayerState(genDir, layerStateNumber, inputID)
+					if savedLayerData == nil {
+						fmt.Printf("No saved layer data for input ID %s. Skipping.\n", inputID)
+						return
+					}
+
+					// Run the evaluation starting from the saved layer state
+					result := ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+
+					if allowIncremental {
+						// Calculate the similarity score
+						similarityScore := CalculateSimilarityScore(result, actualOutput)
+
+						// Convert the similarity score to a value between 0.0 and 1.0
+						perItemScore := similarityScore / 100.0
+
+						// Send the per-item score to the results channel
+						results <- perItemScore
+
+						// Optionally, determine if the model "learned" based on a threshold
+						// For example, consider it learned if similarity is above 90%
+						isCorrect := similarityScore >= 90.0 // Example threshold
+						SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+
+						//fmt.Println(result)
+						//fmt.Println(actualOutput)
+
+					} else {
+						// Compare the results and store the prediction status
+						isCorrect := CompareOutputs(result, actualOutput)
+						if isCorrect {
+							results <- 1.0
+						} else {
+							results <- 0.0
+						}
+
+						// Save the learned status (true if correct, false if incorrect)
+						SaveLearnedOrNot(LoRNotFolder, inputID, isCorrect)
+					}
+				}
+
+			}(v, shardFolderPath, learnedOrNotFolder, generationDir)
+		}
+
+		// Wait for all goroutines to finish
+		wg.Wait()
+		close(results)
+
+		var totalScore float64
+		totalData := 0
+
+		for res := range results {
+			totalScore += res
+			totalData++
+		}
+
+		// Calculate average accuracy
+		if totalData > 0 {
+			averageAccuracy := (totalScore / float64(totalData)) * 100.0
+			if allowIncremental {
+				fmt.Printf("Model %s average similarity score: %.8f%% (%0.8f/%d)\n", modelName, averageAccuracy, totalScore, totalData)
+			} else {
+				fmt.Printf("Model %s accuracy: %.2f%% (%d/%d)\n", modelName, averageAccuracy, int(totalScore), totalData)
+			}
+		} else {
+			fmt.Println("No data to evaluate accuracy.")
+		}
 	}
 
 	// Collect and sum up the total number of `.false` files created

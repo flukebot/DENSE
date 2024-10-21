@@ -94,7 +94,7 @@ func main() {
 
 		dense.CreateModelShards(projectModels, &testDataInterface, mnistDir, i)
 
-		dense.CreateLearnedOrNot(projectModels, &testDataInterface, mnistDir, i)
+		dense.CreateLearnedOrNot(projectModels, &testDataInterface, mnistDir, i, true)
 
 		//IncrementalLayerMutationSearch
 		/*dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
