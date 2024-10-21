@@ -935,3 +935,21 @@ func deepCopyLayer(layer Layer) Layer {
 
 	return newLayer
 }
+
+// ExtractInputAndHiddenLayer extracts the input layer and the specified hidden layer from the network configuration.
+// It returns the input layer and the hidden layer at the specified index.
+func ExtractInputAndHiddenLayer(config *NetworkConfig, hiddenLayerIndex int) (Layer, Layer, error) {
+	// Extract the input layer
+	inputLayer := config.Layers.Input
+
+	// Check if the hidden layer index is within bounds
+	if hiddenLayerIndex < 0 || hiddenLayerIndex >= len(config.Layers.Hidden) {
+		return Layer{}, Layer{}, fmt.Errorf("hidden layer index out of bounds")
+	}
+
+	// Extract the hidden layer at the specified index
+	hiddenLayer := config.Layers.Hidden[hiddenLayerIndex]
+
+	// Return both the input layer and the hidden layer
+	return inputLayer, hiddenLayer, nil
+}

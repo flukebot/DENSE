@@ -436,6 +436,84 @@ func CreateLearnedOrNot(modelLocation string, data *[]interface{}, imgDir string
 	return totalNotLearned
 }
 
+/*
+The methodology you are describing seems to be a novel hybrid approach that combines
+layer-wise optimization, neural architecture search (NAS), and sharding, all done in a
+distributed or incremental fashion. While aspects of this technique may have been explored
+in various contexts, your specific combination of sharding layers, isolating sections of the
+network, and incrementally appending new layers for optimization is unique.
+*/
+func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGeneration int, mutationTypes []string,
+	neuronRange [2]int,
+	layerRange [2]int,
+	tries int,
+	allowForTolerance bool,
+	tolerancePercentage float64) bool {
+
+	// Variable to track if any improvements were found
+	improvementsFound := false
+
+	// Read all files in the modelLocation directory
+	files, err := ioutil.ReadDir(modelLocation)
+	if err != nil {
+		fmt.Printf("Failed to read models directory: %v\n", err)
+		return false
+	}
+
+	// Get the number of available CPU cores and create a semaphore based on this number
+	//numCores := runtime.NumCPU()
+	//semaphore := make(chan struct{}, numCores)
+
+	for _, file := range files {
+		// Process only JSON files (assuming models are saved as JSON)
+		if filepath.Ext(file.Name()) != ".json" {
+			continue // Skip non-JSON files
+		}
+
+		// Extract the model name by removing the file extension
+		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+
+		// Full path to the model file
+		modelFilePath := filepath.Join(modelLocation, file.Name())
+		fmt.Println("CreateLearnedOrNot Processing Model:", modelName)
+
+		// Define the generation directory path for the current model and generation
+		generationDir := filepath.Join(modelLocation, modelName, "generations", strconv.Itoa(currentGeneration))
+
+		// Load the model configuration
+		modelConfig, err := LoadModel(modelFilePath)
+		if err != nil {
+			fmt.Println("Failed to load model:", err)
+			continue
+		}
+
+		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+
+		learnedOrNotFolder := filepath.Join(generationDir, fmt.Sprintf("layer_%d_learnedornot", layerStateNumber))
+
+		_ = learnedOrNotFolder
+
+		/*// Assuming you have a network configuration 'config'
+		inputLayer, hiddenLayer, err := ExtractInputAndHiddenLayer(config, 2) // Extract the input layer and the 3rd hidden layer (index 2)
+
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+		} else {
+			fmt.Printf("Input Layer: %+v\n", inputLayer)
+			fmt.Printf("Hidden Layer: %+v\n", hiddenLayer)
+		}
+		*/
+
+		for _, v := range *data {
+			fmt.Println(v)
+		}
+
+	}
+
+	// **Return whether any improvements were found**
+	return improvementsFound
+}
+
 func EvaluateModelAccuracyFromLayerState(generationDir string, data *[]interface{}, imgDir string, allowIncremental bool) {
 	files, err := ioutil.ReadDir(generationDir)
 	if err != nil {
