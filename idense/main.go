@@ -159,7 +159,7 @@ func main() {
 	//mnistDataFilePath := "./host/mnistData.json"
 	//percentageTrain := 0.8
 	numModels := 2
-	generationNum := 500
+	generationNum := 50
 	projectPath := "./host/generations/"
 
 	filesExist, _ := dense.FilesWithExtensionExistInCurrentFolder(projectPath+"0", ".json")

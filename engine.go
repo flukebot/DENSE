@@ -1199,16 +1199,19 @@ func PerformMutationsMultiThreadedWithFallback(
 	tolerancePercentage float64,
 ) (*NetworkConfig, float64) { // Return score as well
 
+	// Cap the number of tries to prevent excessive resource consumption
 	if tries <= 0 {
 		tries = 100 // Default value for tries if not provided
 	}
 
 	// Determine the number of CPU cores
-	numCPU := runtime.NumCPU()
-	fmt.Printf("Number of CPU cores: %d\n", numCPU)
+	numCores := runtime.NumCPU()
+	fmt.Printf("Number of CPU cores: %d\n", numCores)
+
+	// Create a semaphore to limit the number of concurrent goroutines
+	semaphore := make(chan struct{}, numCores)
 
 	// Channels for jobs and results
-	jobs := make(chan int, tries)
 	results := make(chan struct {
 		model *NetworkConfig
 		score float64
@@ -1217,9 +1220,19 @@ func PerformMutationsMultiThreadedWithFallback(
 	var wg sync.WaitGroup
 
 	// Worker function
-	worker := func() {
-		defer wg.Done()
-		for try := range jobs {
+	for i := 0; i < tries; i++ {
+		wg.Add(1)
+		go func(try int) {
+			defer wg.Done()
+
+			// Acquire a spot in the semaphore
+			semaphore <- struct{}{}
+
+			defer func() {
+				// Release the spot when the goroutine is done
+				<-semaphore
+			}()
+
 			// Load model
 			modelConfig, err := LoadModel(modelFilePathFolder + ".json")
 			if err != nil {
@@ -1228,7 +1241,7 @@ func PerformMutationsMultiThreadedWithFallback(
 					model *NetworkConfig
 					score float64
 				}{nil, 0.0}
-				continue
+				return
 			}
 
 			// Apply mutation
@@ -1240,31 +1253,18 @@ func PerformMutationsMultiThreadedWithFallback(
 			// Calculate improvement score (similarity)
 			improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
 
-			// Log the improvement score for debugging
-			//fmt.Printf("Try %d: Improvement Score: %.4f\n", try+1, improvementScore)
-
 			results <- struct {
 				model *NetworkConfig
 				score float64
 			}{mutatedModel, improvementScore}
-		}
+		}(i)
 	}
 
-	// Start worker pool
-	wg.Add(numCPU)
-	for i := 0; i < numCPU; i++ {
-		go worker()
-	}
-
-	// Send jobs
-	for i := 0; i < tries; i++ {
-		jobs <- i
-	}
-	close(jobs) // Close the jobs channel since no more jobs will be sent
-
-	// Wait for all workers to finish
-	wg.Wait()
-	close(results) // Close results channel after all workers are done
+	// Close results channel after all workers are done
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
 
 	// Collect all mutated models and determine the best mutated model
 	var bestMutatedModel *NetworkConfig
@@ -1291,7 +1291,7 @@ func PerformMutationsMultiThreadedWithFallback(
 	// Log the main model's score
 	fmt.Printf("Main Model Similarity Score: %.4f\n", mainModelScore)
 
-	// If there is a best mutated model, compare its score with the main model's score
+	// Compare the best mutated model's score with the main model's score
 	if bestMutatedModel != nil {
 		fmt.Printf("Best Mutated Model Similarity Score: %.4f\n", bestMutatedScore)
 
