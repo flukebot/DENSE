@@ -448,7 +448,7 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 	layerRange [2]int,
 	tries int,
 	allowForTolerance bool,
-	tolerancePercentage float64) bool {
+	tolerancePercentage float64, lstEvalsTryingToLearnAmount int) bool {
 
 	// Variable to track if any improvements were found
 	improvementsFound := false
@@ -487,11 +487,86 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 			continue
 		}
 
-		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+		//layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
 
-		learnedOrNotFolder := filepath.Join(generationDir, fmt.Sprintf("layer_%d_learnedornot", layerStateNumber))
+		layerStateNumber, err := FindLayerNumberFromFolder(generationDir, "learnedornot")
+		if err != nil {
+			fmt.Println("Error:", err)
+		} else {
+			fmt.Printf("Found Layer Number: %d\n", layerStateNumber)
+			learnedOrNotFolder := filepath.Join(generationDir, fmt.Sprintf("layer_%d_learnedornot", layerStateNumber))
 
-		_ = learnedOrNotFolder
+			lstEvalsTryingToLearn, _ := GetFilesWithExtension(learnedOrNotFolder, ".false", lstEvalsTryingToLearnAmount, false)
+			fmt.Println(lstEvalsTryingToLearn)
+
+			// Call the ExtractInputAndHiddenLayer function
+			inputLayer, hiddenLayer, err := ExtractInputAndHiddenLayer(modelConfig, layerStateNumber)
+			if err != nil {
+				fmt.Println("Error extracting input and hidden layers: %v", err)
+			}
+
+			// Create a small network string before the tries loop
+			smallNetworkString, err := CreateSmallNetworkString(inputLayer, hiddenLayer, len(modelConfig.Layers.Output.Neurons), []string{"sigmoid"}, modelConfig.Metadata.ModelID+"_small", modelConfig.Metadata.ProjectName)
+			if err != nil {
+				fmt.Printf("Error creating small network string: %v\n", err)
+				continue
+			}
+
+			for indexShards, dataShard := range lstEvalsTryingToLearn {
+				updated := strings.TrimPrefix(dataShard, "input_")
+				fmt.Println(indexShards, dataShard)
+				savedLayerData := LoadShardedLayerState(generationDir, layerStateNumber, updated)
+
+				// Get the expected output map for the current shard
+				outputMap, err := GetOutputByFileName(data, updated)
+				if err != nil {
+					fmt.Println("Error fetching output map:", err)
+					continue
+				}
+
+				fmt.Println(outputMap)
+
+				if tries <= 0 {
+					tries = 100 // Default value for tries if not provided
+				}
+
+				// Begin the tries loop
+				for i := 0; i < tries; i++ {
+					// Deserialize the small network string to create a new neural network
+					var smallNetworkConfig NetworkConfig
+					err := json.Unmarshal([]byte(smallNetworkString), &smallNetworkConfig)
+					if err != nil {
+						fmt.Printf("Try %d: Failed to deserialize small network: %v\n", i+1, err)
+						continue
+					}
+
+					// Apply mutation to the deserialized network
+					mutatedModel := ApplySingleMutation(&smallNetworkConfig, mutationTypes, neuronRange, layerRange)
+
+					// Continue the feedforward process with the mutated model
+					mutatedResult := ContinueFeedforward(mutatedModel, savedLayerData, layerStateNumber)
+
+					if mutatedResult == nil {
+						fmt.Printf("Try %d: Feedforward returned nil result.\n", i+1)
+						continue
+					}
+
+					// Calculate improvement score (similarity)
+					improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
+					fmt.Println("--------------------")
+
+					err = SaveModel("/home/flukebot/git/DENSE/finallocaldesign/host/models/model_0/generations/0/test.json", mutatedModel)
+					if err != nil {
+						//fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+						continue
+					}
+
+					// Console log the improvement score
+					fmt.Printf("Try %d: Improvement Score: %.4f%%\n", i+1, improvementScore)
+					break
+				}
+			}
+		}
 
 		/*// Assuming you have a network configuration 'config'
 		inputLayer, hiddenLayer, err := ExtractInputAndHiddenLayer(config, 2) // Extract the input layer and the 3rd hidden layer (index 2)
@@ -504,9 +579,9 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 		}
 		*/
 
-		for _, v := range *data {
+		/*for _, v := range *data {
 			fmt.Println(v)
-		}
+		}*/
 
 	}
 
@@ -1296,7 +1371,7 @@ func ApplySingleMutation(modelConfig *NetworkConfig, mutationTypes []string, neu
 	previousOutputActivationTypes := GetPreviousOutputActivationTypes(modelConfig)
 
 	// Reattach the output layer with the previous activation types
-	ReattachOutputLayer(modelConfig, len(previousOutputActivationTypes), previousOutputActivationTypes)
+	ReattachOutputLayerZeroBias(modelConfig, len(previousOutputActivationTypes), previousOutputActivationTypes)
 
 	// Return the mutated model
 	return modelConfig

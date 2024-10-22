@@ -1,6 +1,7 @@
 package dense
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -744,7 +745,7 @@ func CreateCustomNetworkConfig(numInputs, numFirstLayerNeurons, numOutputs int, 
 				}
 				return connections
 			}(),
-			Bias: rand.Float64(),
+			Bias: 0,
 		}
 	}
 
@@ -824,6 +825,98 @@ func ReattachOutputLayer(config *NetworkConfig, numOutputs int, outputActivation
 	}
 
 	//fmt.Println("Reattached output layer to the new last hidden layer.")
+}
+
+func ReattachOutputLayerZeroBias(config *NetworkConfig, numOutputs int, outputActivationTypes []string) {
+	lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+
+	// Reset the output layer
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
+
+	for i := 0; i < numOutputs; i++ {
+		neuronID := fmt.Sprintf("output%d", i)
+		activationType := "softmax" // Default activation type; can be customized
+
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
+
+		connections := make(map[string]Connection)
+		for hiddenNeuronID := range lastHiddenLayer.Neurons {
+			connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5} // Initialize weights around 0
+		}
+
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections:    connections,
+			Bias:           0,
+		}
+	}
+
+	//fmt.Println("Reattached output layer to the new last hidden layer.")
+}
+
+// CreateCustomNetworkWithLayers creates a NetworkConfig with a single input layer, appends passed hidden layers,
+// and attaches the output layer to the last hidden layer with the given activation types.
+func CreateCustomNetworkWithLayers(numInputs, numOutputs int, hiddenLayers []Layer, outputActivationTypes []string, modelID, projectName string) *NetworkConfig {
+	// Initialize the NetworkConfig
+	config := &NetworkConfig{
+		Metadata: ModelMetadata{
+			ModelID:              modelID,
+			ProjectName:          projectName,
+			LastTrainingAccuracy: 0.0,
+			LastTestAccuracy:     0.0,
+		},
+	}
+
+	// Create the input layer
+	config.Layers.Input = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
+	for i := 0; i < numInputs; i++ {
+		neuronID := "input" + strconv.Itoa(i)
+		config.Layers.Input.Neurons[neuronID] = Neuron{
+			Connections: make(map[string]Connection),
+			Bias:        0, // No bias for input neurons
+		}
+	}
+
+	// Append the hidden layers
+	config.Layers.Hidden = append(config.Layers.Hidden, hiddenLayers...)
+
+	// Attach the output layer
+	lastHiddenLayer := config.Layers.Hidden[len(config.Layers.Hidden)-1]
+
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
+
+	for i := 0; i < numOutputs; i++ {
+		neuronID := "output" + strconv.Itoa(i)
+		activationType := "softmax" // Default activation type
+
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
+
+		connections := make(map[string]Connection)
+		for hiddenNeuronID := range lastHiddenLayer.Neurons {
+			connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5}
+		}
+
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections:    connections,
+			Bias:           0, // No bias for output neurons
+		}
+	}
+
+	return config
 }
 
 func GetPreviousOutputActivationTypes(config *NetworkConfig) []string {
@@ -952,4 +1045,54 @@ func ExtractInputAndHiddenLayer(config *NetworkConfig, hiddenLayerIndex int) (La
 
 	// Return both the input layer and the hidden layer
 	return inputLayer, hiddenLayer, nil
+}
+
+// CreateSmallNetworkString builds a small neural network from inputLayer and hiddenLayer,
+// serializes it to a JSON string, and returns the string.
+func CreateSmallNetworkString(inputLayer Layer, hiddenLayer Layer, numOutputs int, outputActivationTypes []string, modelID, projectName string) (string, error) {
+	// Initialize NetworkConfig
+	config := &NetworkConfig{
+		Metadata: ModelMetadata{
+			ModelID:     modelID,
+			ProjectName: projectName,
+		},
+	}
+
+	// Assign input layer
+	config.Layers.Input = inputLayer
+
+	// Assign hidden layer(s)
+	config.Layers.Hidden = []Layer{hiddenLayer}
+
+	// Define output layer
+	config.Layers.Output = Layer{
+		LayerType: "dense",
+		Neurons:   make(map[string]Neuron),
+	}
+	for i := 0; i < numOutputs; i++ {
+		neuronID := "output" + strconv.Itoa(i)
+		activationType := "sigmoid" // Default activation
+		if i < len(outputActivationTypes) {
+			activationType = outputActivationTypes[i]
+		}
+
+		connections := make(map[string]Connection)
+		for hiddenNeuronID := range hiddenLayer.Neurons {
+			connections[hiddenNeuronID] = Connection{Weight: rand.Float64() - 0.5} // Initialize weights around 0
+		}
+
+		config.Layers.Output.Neurons[neuronID] = Neuron{
+			ActivationType: activationType,
+			Connections:    connections,
+			Bias:           0, // Initialize bias to 0
+		}
+	}
+
+	// Serialize to JSON
+	jsonBytes, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize small network: %w", err)
+	}
+
+	return string(jsonBytes), nil
 }

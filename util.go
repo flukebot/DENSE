@@ -596,3 +596,33 @@ func FilesWithExtensionExistInCurrentFolder(directory, fileExtension string) (bo
 func GenerateUniqueModelID(parentID string) string {
 	return fmt.Sprintf("%s_child_%s", parentID, uuid.New().String())
 }
+
+// FindLayerNumberFromFolder looks for child folders that contain the pattern (e.g., "learnedornot")
+// and extracts the number from the folder name (e.g., "layer_X_learnedornot").
+// Returns the number as an int if found, or an error if no folder matches the pattern.
+func FindLayerNumberFromFolder(path string, pattern string) (int, error) {
+	// Read all the child items (files/folders) in the directory
+	items, err := ioutil.ReadDir(path)
+	if err != nil {
+		return -1, fmt.Errorf("failed to read directory: %v", err)
+	}
+
+	// Loop through each item in the directory
+	for _, item := range items {
+		if item.IsDir() && strings.Contains(item.Name(), pattern) {
+			// Extract the number between "layer_" and "_learnedornot"
+			parts := strings.Split(item.Name(), "_")
+			if len(parts) > 1 {
+				// Convert the second part (number) to an integer
+				layerNumber, err := strconv.Atoi(parts[1])
+				if err != nil {
+					return -1, fmt.Errorf("failed to convert layer number: %v", err)
+				}
+				return layerNumber, nil
+			}
+		}
+	}
+
+	// If no matching folder is found, return an error
+	return -1, fmt.Errorf("no folder found containing pattern: %s", pattern)
+}

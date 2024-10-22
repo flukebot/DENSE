@@ -82,13 +82,13 @@ func main() {
 	}
 
 	// Mutation types
-	/*mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
+	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
 
 	// Define ranges for neurons/filters and layers dynamically
 	neuronRange := [2]int{10, 128} // Min and max neurons or filters
 	layerRange := [2]int{1, 5}     // Min and max layers
 
-	noImprovementCounter := 0*/
+	//noImprovementCounter := 0
 
 	for i := 0; i <= generationNum; i++ {
 
@@ -96,6 +96,7 @@ func main() {
 
 		dense.CreateLearnedOrNot(projectModels, &testDataInterface, mnistDir, i, true)
 
+		dense.IncrementalLayerSearch(projectModels, &testDataInterface, i, mutationTypes, neuronRange, layerRange, 1000, true, 40, 5)
 		//IncrementalLayerMutationSearch
 		/*dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
