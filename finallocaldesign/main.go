@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 	//"strconv"
 )
 
@@ -23,6 +24,7 @@ var testDataChunk []dense.ImageData
 
 func main() {
 	fmt.Println("Starting CNN train and host")
+
 	jsonFilePath = "./host/mnistData.json"
 	// Check if the MNIST directory exists, and run setup if it doesn't
 	mnistDir := "./host/MNIST"
@@ -80,6 +82,9 @@ func main() {
 	for i, data := range trainData {
 		testDataInterface[i] = data
 	}
+
+	massiveModelToMicroSkippingModelShowCase(&testDataInterface, mnistDir)
+	return
 
 	// Mutation types
 	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
@@ -183,4 +188,95 @@ func LoadMNISTData() { // ([]dense.ImageData, error) {
 	}
 
 	//return mnistData, nil
+}
+
+func massiveModelToMicroSkippingModelShowCase(testDataInterface *[]interface{}, mnistDir string) {
+	projectName := "AIModelTestProject"
+	inputSize := 28 * 28 // Input size for MNIST data
+	outputSize := 10     // Output size for MNIST digits (0-9)
+	outputTypes := []string{
+		"sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+		"sigmoid", "sigmoid", "sigmoid", "sigmoid", "sigmoid",
+	} // Activation type for output layer
+	projectModels := "./host/massive2Microskip/"
+
+	//mnistDataFilePath := "./host/mnistData.json"
+	//percentageTrain := 0.8
+	numModels := 1
+	filesExist, _ := dense.FilesWithExtensionExistInCurrentFolder(projectModels, ".json")
+
+	if filesExist {
+		fmt.Println("Files with the specified extension already exist. Skipping model generation.")
+	} else {
+		fmt.Println("No files found with the specified extension. Generating models.")
+		dense.GenerateModelsIfNotExist(projectModels, numModels, inputSize, outputSize, outputTypes, projectName)
+	}
+
+	files, err := ioutil.ReadDir(projectModels)
+	if err != nil {
+		fmt.Printf("Failed to read models directory: %v\n", err)
+
+	}
+
+	mutationTypes := []string{"AppendNewLayer", "AppendMultipleLayers", "AppendCNNAndDenseLayer", "AppendLSTMLayer"}
+
+	// Define ranges for neurons/filters and layers dynamically
+	neuronRange := [2]int{10, 128} // Min and max neurons or filters
+	layerRange := [2]int{1, 5}     // Min and max layers
+
+	for _, file := range files {
+		if filepath.Ext(file.Name()) != ".json" {
+			continue // Skip non-JSON files
+		}
+
+		fmt.Println("show casing on model", file.Name())
+		modelFilePath := filepath.Join(projectModels, file.Name())
+
+		modelConfig, err := dense.LoadModel(modelFilePath)
+		if err != nil {
+			fmt.Println("Failed to load model:", err)
+			continue
+		}
+
+		//_ = modelConfig
+
+		layerStateNumber := dense.GetLastHiddenLayerIndex(modelConfig)
+
+		if layerStateNumber < 1 {
+			for i := 0; i < 10; i++ {
+				modelConfig = dense.ApplySingleMutation(modelConfig, mutationTypes, neuronRange, layerRange)
+				layerStateNumber = dense.GetLastHiddenLayerIndex(modelConfig)
+				fmt.Println("increased layer size to", layerStateNumber)
+			}
+			err = dense.SaveModel(modelFilePath, modelConfig)
+			if err != nil {
+				//fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+				continue
+			}
+		}
+
+		dense.CreateModelShards(projectModels, testDataInterface, mnistDir, 0)
+
+		layerStateNumber = dense.GetLastHiddenLayerIndex(modelConfig)
+		// Assuming testDataInterface is a slice of type []interface{}
+		// Dereference the pointer to access the slice
+		item := (*testDataInterface)[0] // Access the first element, you can change the index as needed
+
+		// Type assert the element to its actual type (assuming it's dense.ImageData)
+		imageData, ok := item.(dense.ImageData)
+		if !ok {
+			fmt.Println("Failed to type assert the testDataInterface element to dense.ImageData")
+			return
+		}
+
+		// Now you can use imageData in the function call
+		inputs := dense.ConvertImageToInputs(filepath.Join(mnistDir, imageData.FileName))
+
+		// Call the function and capture both return values
+		outputPredicted := dense.ContinueFeedforward(modelConfig, inputs, layerStateNumber)
+
+		fmt.Println(outputPredicted)
+
+		break
+	}
 }
