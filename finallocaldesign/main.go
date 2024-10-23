@@ -277,6 +277,40 @@ func massiveModelToMicroSkippingModelShowCase(testDataInterface *[]interface{}, 
 
 		fmt.Println(outputPredicted)
 
+		// Call the ExtractInputAndHiddenLayer function
+		inputLayer, hiddenLayer, err := dense.ExtractInputAndHiddenLayer(modelConfig, layerStateNumber)
+		if err != nil {
+			fmt.Println("Error extracting input and hidden layers: %v", err)
+		}
+
+		// Create a small network string before the tries loop
+		smallNetworkString, err := dense.CreateSmallNetworkString(inputLayer, hiddenLayer, len(modelConfig.Layers.Output.Neurons), []string{"sigmoid"}, modelConfig.Metadata.ModelID+"_small", modelConfig.Metadata.ProjectName)
+		if err != nil {
+			fmt.Printf("Error creating small network string: %v\n", err)
+			continue
+		}
+
+		var smallNetworkConfig dense.NetworkConfig
+		err = json.Unmarshal([]byte(smallNetworkString), &smallNetworkConfig)
+		if err != nil {
+			fmt.Printf("Try %d: Failed to deserialize small network: %v\n", err)
+			continue
+		}
+
+		layerStateNumberSmall := dense.GetLastHiddenLayerIndex(&smallNetworkConfig)
+		outputPredictedSmall := dense.ContinueFeedforward(&smallNetworkConfig, inputs, layerStateNumberSmall)
+
+		fmt.Println(outputPredictedSmall)
+
+		// After the rest of your function logic, add the following:
+		newFilePath := filepath.Join(filepath.Dir(modelFilePath), "small.json")
+
+		err = dense.SaveModel(newFilePath, &smallNetworkConfig)
+		if err != nil {
+			//fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+			continue
+		}
+
 		break
 	}
 }
