@@ -1049,7 +1049,7 @@ func ExtractInputAndHiddenLayer(config *NetworkConfig, hiddenLayerIndex int) (La
 
 // CreateSmallNetworkString builds a small neural network from inputLayer and hiddenLayer,
 // serializes it to a JSON string, and returns the string.
-func CreateSmallNetworkString(inputLayer Layer, hiddenLayer Layer, numOutputs int, outputActivationTypes []string, modelID, projectName string) (string, error) {
+func CreateSmallNetworkWithRandomOutput(inputLayer Layer, hiddenLayer Layer, numOutputs int, outputActivationTypes []string, modelID, projectName string) (string, error) {
 	// Initialize NetworkConfig
 	config := &NetworkConfig{
 		Metadata: ModelMetadata{
@@ -1092,6 +1092,41 @@ func CreateSmallNetworkString(inputLayer Layer, hiddenLayer Layer, numOutputs in
 	jsonBytes, err := json.Marshal(config)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize small network: %w", err)
+	}
+
+	return string(jsonBytes), nil
+}
+
+func CreateSmallNetworkWithExistingOutput(
+	inputLayer Layer,
+	hiddenLayer Layer,
+	outputLayer Layer, // Existing output layer from the main network
+	numOutputs int,
+	outputActivationTypes []string,
+	modelID,
+	projectName string,
+) (string, error) {
+	// Initialize NetworkConfig
+	config := &NetworkConfig{
+		Metadata: ModelMetadata{
+			ModelID:     modelID,
+			ProjectName: projectName,
+		},
+	}
+
+	// Assign input layer
+	config.Layers.Input = inputLayer
+
+	// Assign hidden layer(s)
+	config.Layers.Hidden = []Layer{hiddenLayer}
+
+	// Assign the existing output layer from the main network
+	config.Layers.Output = outputLayer
+
+	// Serialize to JSON
+	jsonBytes, err := json.Marshal(config)
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize small network with existing output: %w", err)
 	}
 
 	return string(jsonBytes), nil

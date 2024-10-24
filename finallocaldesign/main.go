@@ -8,6 +8,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	//"strconv"
 )
 
@@ -101,7 +103,7 @@ func main() {
 
 		dense.CreateLearnedOrNot(projectModels, &testDataInterface, mnistDir, i, true)
 
-		dense.IncrementalLayerSearch(projectModels, &testDataInterface, i, mutationTypes, neuronRange, layerRange, 1000, true, 40, 5)
+		dense.IncrementalLayerSearch(projectModels, &testDataInterface, i, mutationTypes, neuronRange, layerRange, 1000, true, 40, 5, outputTypes)
 		//IncrementalLayerMutationSearch
 		/*dense.EvaluateModelAccuracyFromLayerState(generationDir, &testDataInterface, mnistDir, true)
 
@@ -273,18 +275,39 @@ func massiveModelToMicroSkippingModelShowCase(testDataInterface *[]interface{}, 
 		inputs := dense.ConvertImageToInputs(filepath.Join(mnistDir, imageData.FileName))
 
 		// Call the function and capture both return values
-		outputPredicted := dense.ContinueFeedforward(modelConfig, inputs, layerStateNumber)
+		outputPredicted := dense.Feedforward(modelConfig, inputs)
 
+		fmt.Println("MAIN OUTPUT")
 		fmt.Println(outputPredicted)
 
+		// Extract the model name by removing the file extension
+		modelName := strings.TrimSuffix(file.Name(), filepath.Ext(file.Name()))
+		generationDir := filepath.Join(projectModels, modelName, "generations", strconv.Itoa(0))
+		fmt.Println(generationDir)
+
+		savedLayerData := dense.LoadShardedLayerState(generationDir, layerStateNumber, imageData.FileName)
+		outputPredictSkipping := dense.ContinueFeedforward(modelConfig, savedLayerData, layerStateNumber)
+		fmt.Println("main skipping output")
+		fmt.Println(outputPredictSkipping)
 		// Call the ExtractInputAndHiddenLayer function
 		inputLayer, hiddenLayer, err := dense.ExtractInputAndHiddenLayer(modelConfig, layerStateNumber)
 		if err != nil {
 			fmt.Println("Error extracting input and hidden layers: %v", err)
 		}
 
-		// Create a small network string before the tries loop
-		smallNetworkString, err := dense.CreateSmallNetworkString(inputLayer, hiddenLayer, len(modelConfig.Layers.Output.Neurons), []string{"sigmoid"}, modelConfig.Metadata.ModelID+"_small", modelConfig.Metadata.ProjectName)
+		// After extracting inputLayer and hiddenLayer
+		outputLayer := modelConfig.Layers.Output
+
+		// Create a small network string including the existing output layer
+		smallNetworkString, err := dense.CreateSmallNetworkWithExistingOutput(
+			inputLayer,
+			hiddenLayer,
+			outputLayer,
+			len(modelConfig.Layers.Output.Neurons),
+			outputTypes,
+			modelConfig.Metadata.ModelID+"_small",
+			modelConfig.Metadata.ProjectName,
+		)
 		if err != nil {
 			fmt.Printf("Error creating small network string: %v\n", err)
 			continue
@@ -298,8 +321,12 @@ func massiveModelToMicroSkippingModelShowCase(testDataInterface *[]interface{}, 
 		}
 
 		layerStateNumberSmall := dense.GetLastHiddenLayerIndex(&smallNetworkConfig)
-		outputPredictedSmall := dense.ContinueFeedforward(&smallNetworkConfig, inputs, layerStateNumberSmall)
 
+		//fmt.Println("input_" + imageData.FileName + ".csv")
+
+		outputPredictedSmall := dense.ContinueFeedforward(&smallNetworkConfig, savedLayerData, layerStateNumberSmall)
+
+		fmt.Println("SMALL OUTPUT")
 		fmt.Println(outputPredictedSmall)
 
 		// After the rest of your function logic, add the following:

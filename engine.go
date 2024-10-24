@@ -448,7 +448,7 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 	layerRange [2]int,
 	tries int,
 	allowForTolerance bool,
-	tolerancePercentage float64, lstEvalsTryingToLearnAmount int) bool {
+	tolerancePercentage float64, lstEvalsTryingToLearnAmount int, outputTypes []string) bool {
 
 	// Variable to track if any improvements were found
 	improvementsFound := false
@@ -487,13 +487,51 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 			continue
 		}
 
-		//layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
+		layerStateNumber := GetLastHiddenLayerIndex(modelConfig)
 
-		layerStateNumber, err := FindLayerNumberFromFolder(generationDir, "learnedornot")
+		//layerStateNumber, err := FindLayerNumberFromFolder(generationDir, "learnedornot")
+
+		_ = modelConfig
+
+		// Call the ExtractInputAndHiddenLayer function
+		inputLayer, hiddenLayer, err := ExtractInputAndHiddenLayer(modelConfig, layerStateNumber)
+		if err != nil {
+			fmt.Println("Error extracting input and hidden layers: %v", err)
+		}
+
+		// After extracting inputLayer and hiddenLayer
+		outputLayer := modelConfig.Layers.Output
+
+		// Create a small network string before the tries loop
+		smallNetworkString, err := CreateSmallNetworkWithExistingOutput(inputLayer, hiddenLayer, outputLayer, len(modelConfig.Layers.Output.Neurons), outputTypes, modelConfig.Metadata.ModelID+"_small", modelConfig.Metadata.ProjectName)
+		if err != nil {
+			fmt.Printf("Error creating small network string: %v\n", err)
+			continue
+		}
+
+		_ = smallNetworkString
+
+		fmt.Println("saving small model to ", generationDir)
+
+		saveSmallModelLocation := filepath.Join(generationDir, "small.json")
+
+		var smallNetworkConfig NetworkConfig
+		err = json.Unmarshal([]byte(smallNetworkString), &smallNetworkConfig)
+		if err != nil {
+			fmt.Printf("Try %d: Failed to deserialize small network: %v\n", err)
+			continue
+		}
+
+		err = SaveModel(saveSmallModelLocation, &smallNetworkConfig)
+		if err != nil {
+			//fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
+			continue
+		}
+
 		if err != nil {
 			fmt.Println("Error:", err)
 		} else {
-			fmt.Printf("Found Layer Number: %d\n", layerStateNumber)
+			/*fmt.Printf("Found Layer Number: %d\n", layerStateNumber)
 			learnedOrNotFolder := filepath.Join(generationDir, fmt.Sprintf("layer_%d_learnedornot", layerStateNumber))
 
 			lstEvalsTryingToLearn, _ := GetFilesWithExtension(learnedOrNotFolder, ".false", lstEvalsTryingToLearnAmount, false)
@@ -515,6 +553,7 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 			for indexShards, dataShard := range lstEvalsTryingToLearn {
 				updated := strings.TrimPrefix(dataShard, "input_")
 				fmt.Println(indexShards, dataShard)
+				fmt.Println("tes5tingg", updated)
 				savedLayerData := LoadShardedLayerState(generationDir, layerStateNumber, updated)
 
 				// Get the expected output map for the current shard
@@ -555,7 +594,7 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 					improvementScore := CalculateImprovementScore(mutatedResult, outputMap)
 					fmt.Println("--------------------")
 
-					err = SaveModel("/home/flukebot/git/DENSE/finallocaldesign/host/models/model_0/generations/0/test.json", mutatedModel)
+					err = SaveModel("/home/flukebot/git/DENSE/finallocaldesign/host/models/model_0/generations/0/test.json", &smallNetworkConfig)
 					if err != nil {
 						//fmt.Printf("Failed to save child model to next generation as %s: %v\n", newChildModelFileName, err)
 						continue
@@ -565,7 +604,7 @@ func IncrementalLayerSearch(modelLocation string, data *[]interface{}, currentGe
 					fmt.Printf("Try %d: Improvement Score: %.4f%%\n", i+1, improvementScore)
 					break
 				}
-			}
+			}*/
 		}
 
 		/*// Assuming you have a network configuration 'config'
